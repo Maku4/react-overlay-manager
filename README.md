@@ -1,6 +1,6 @@
 # React Overlay Manager
 
-A lightweight, **type-safe** overlay system for React with zero runtime dependencies and built-in DevTools.
+A lightweight, **type-safe** overlay system for React with a minimal runtime footprint (small dependency on Immer) and built-in DevTools.
 
 - 📦 **Headless** – bring your own styles / animations
 - 🔒 **Fully typed** – compile-time safety for props and results
@@ -210,12 +210,35 @@ These props are automatically passed to every overlay component.
 
 ---
 
+### `<OverlayManager />` Props
+
+| Prop                  | Type                           | Default                                 | Purpose                                                                                                  |
+| :-------------------- | :----------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------- |
+| `manager`             | `OverlayManagerCore`           | —                                       | The manager instance created by `createOverlayManager` (or the shared `overlays`).                       |
+| `zIndexBase`          | `number`                       | `100`                                   | Base `z-index` applied to the first overlay container; each subsequent overlay uses `base + index`.      |
+| `defaultExitDuration` | `number` \| `null`             | `undefined`                             | Global fallback for exit removal. `0` = remove immediately. `null` = disable timer, use events/callback. |
+| `portalTarget`        | `HTMLElement` \| `null`        | `document.body` (client) / `null` (SSR) | Default portal element for all overlays. Can be overridden per `open()` call.                            |
+| `stackingBehavior`    | `'stack'` \| `'hide-previous'` | `'hide-previous'`                       | Global stacking mode; can be overridden per `open()` call.                                               |
+
+---
+
+### `open()` Options (OpenOptions)
+
+The second argument to `open()` merges your component props with a few manager options:
+
+| Option             | Type                           | Purpose                                                                                         |
+| :----------------- | :----------------------------- | :---------------------------------------------------------------------------------------------- |
+| `id`               | `OverlayId`                    | Optional explicit ID. If omitted, a unique one is generated.                                    |
+| `exitDuration`     | `number` \| `null`             | Per-instance exit timer. `0` = remove immediately. `null` = disable timer, use events/callback. |
+| `portalTarget`     | `HTMLElement` \| `null`        | Per-instance portal target. Overrides `<OverlayManager portalTarget={...} />`.                  |
+| `stackingBehavior` | `'stack'` \| `'hide-previous'` | Per-instance stacking mode. Overrides global `stackingBehavior`.                                |
+
 ## React Hook: `useOverlayStore`
 
 For building custom UI that reacts to the overlay state, `useOverlayStore` provides an efficient way to subscribe to changes. It's powered by `useSyncExternalStore` and only triggers re-renders when the selected state changes.
 
 ```tsx
-import { useOverlayStore } from 'react-overlay-manager';
+import { useOverlayStore } from '@react-overlay-manager/core';
 import { overlayManager } from './services/overlayManager';
 
 function GlobalBlocker() {
@@ -253,7 +276,7 @@ The precedence for timers is:
 2. `options.exitDuration` (number): Uses the per-instance duration.
 3. `<OverlayManager defaultExitDuration={...} />`: Uses the global fallback duration.
 
-> **Important**: The manager listens for `transitionend`/`animationend` on the **container `<div>` it renders**, not on your component's nested elements. If your animations are deeply nested, their events might not bubble up. In that case, use a timer or call `onExitComplete()` manually. The library safely handles multiple redundant events, so you don't have to worry about race conditions.
+> **Important**: The manager listens for `transitionend`/`animationend` on the **container `<div>` it renders**, not on your component's nested elements. These events do bubble, so child animations will usually be detected. Some libraries or patterns may not emit native events; in that case, set a timer or call `onExitComplete()` manually. The library safely handles multiple redundant events, so you don't have to worry about race conditions.
 
 ---
 
@@ -521,7 +544,7 @@ This library is headless and unopinionated about your markup. It is your respons
 - **Focus Management**: Trap focus within the overlay while it's open and return focus to the trigger element when it closes.
 - **Keyboard Navigation**: Allow closing with the `Escape` key.
 
-Consider using a html's <dialog>.
+Consider using the native HTML `<dialog>` element.
 
 ---
 
