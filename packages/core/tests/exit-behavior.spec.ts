@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react';
 import { defineOverlay } from '../src/defineOverlay';
 import { OverlayManagerCore } from '../src/manager/OverlayManagerCore';
-import type { OverlayComponent } from '../src/types';
+import type { OverlayComponent, PromiseWithId, OverlayId } from '../src/types';
 
 vi.useFakeTimers();
 
@@ -11,10 +12,7 @@ type VoidResult = void;
 const Dummy: OverlayComponent<NoProps, VoidResult> = defineOverlay<
   NoProps,
   void
->(() => {
-  // headless - not actually rendered in these manager-level tests
-  return null as unknown as any;
-});
+>(() => React.createElement('div'));
 
 describe('exit behavior', () => {
   let manager: OverlayManagerCore<{ dummy: typeof Dummy }>;
@@ -29,8 +27,8 @@ describe('exit behavior', () => {
 
   it('removes after defaultExitDuration when local is undefined', async () => {
     manager.defaultExitDuration = 300;
-    const p = manager.open('dummy'); // no local exitDuration
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy'); // no local exitDuration
+    const id: OverlayId = p.id;
     expect(manager.isOpen(id)).toBe(true);
 
     manager.getInstance(id)?.close(); // trigger close
@@ -47,8 +45,8 @@ describe('exit behavior', () => {
 
   it('uses local exitDuration override', async () => {
     manager.defaultExitDuration = 300;
-    const p = manager.open('dummy', { exitDuration: 200 });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', { exitDuration: 200 });
+    const id: OverlayId = p.id;
 
     manager.getInstance(id)?.close();
 
@@ -60,8 +58,10 @@ describe('exit behavior', () => {
   });
 
   it('when exitDuration is null, waits for onExitComplete', async () => {
-    const p = manager.open('dummy', { exitDuration: null });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', {
+      exitDuration: null,
+    });
+    const id: OverlayId = p.id;
 
     const inst = manager.getInstance(id);
     expect(inst).toBeTruthy();
@@ -78,8 +78,8 @@ describe('exit behavior', () => {
   });
 
   it('clears pending timeout if onExitComplete is called earlier', async () => {
-    const p = manager.open('dummy', { exitDuration: 500 });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', { exitDuration: 500 });
+    const id: OverlayId = p.id;
     const inst = manager.getInstance(id)!;
 
     inst.close();
@@ -96,8 +96,8 @@ describe('exit behavior', () => {
 
   it('guards duplicate close calls gracefully', async () => {
     manager.defaultExitDuration = 100;
-    const p = manager.open('dummy');
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy');
+    const id: OverlayId = p.id;
     const inst = manager.getInstance(id)!;
 
     inst.close();
@@ -111,8 +111,8 @@ describe('exit behavior', () => {
   // New edge cases below
 
   it('exitDuration = 0 removes immediately', () => {
-    const p = manager.open('dummy', { exitDuration: 0 });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', { exitDuration: 0 });
+    const id: OverlayId = p.id;
     const spy = vi.fn();
     const unsub = manager.subscribe((e) => {
       if (e.type === 'REMOVE') spy();
@@ -130,8 +130,10 @@ describe('exit behavior', () => {
 
   it('negative exitDuration behaves as immediate removal (defensive)', () => {
     // force a negative value via type cast to simulate erroneous input
-    const p = manager.open('dummy', { exitDuration: -10 as unknown as number });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', {
+      exitDuration: -10 as unknown as number,
+    });
+    const id: OverlayId = p.id;
 
     manager.getInstance(id)!.close();
 
@@ -140,8 +142,8 @@ describe('exit behavior', () => {
   });
 
   it('onExitComplete after removal is a safe no-op', () => {
-    const p = manager.open('dummy', { exitDuration: 0 });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', { exitDuration: 0 });
+    const id: OverlayId = p.id;
     const inst = manager.getInstance(id)!;
 
     inst.close();
@@ -154,11 +156,13 @@ describe('exit behavior', () => {
   });
 
   it('closeAll handles mixed strategies (timer and manual)', () => {
-    const a = manager.open('dummy', { exitDuration: 10 });
-    const idA = (a as any).id;
+    const a: PromiseWithId<void> = manager.open('dummy', { exitDuration: 10 });
+    const idA: OverlayId = a.id;
 
-    const b = manager.open('dummy', { exitDuration: null });
-    const idB = (b as any).id;
+    const b: PromiseWithId<void> = manager.open('dummy', {
+      exitDuration: null,
+    });
+    const idB: OverlayId = b.id;
 
     // closeAll schedules removal for A (10ms) and marks B closing but requires onExitComplete
     manager.closeAll();

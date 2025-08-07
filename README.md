@@ -32,12 +32,15 @@ A lightweight, **type-safe** overlay system for React with zero runtime dependen
 - [Accessibility](#accessibility)
 - [Troubleshooting](#troubleshooting)
 - [Bundling & Versioning](#bundling--versioning)
+- [Quality & Coverage](#quality--coverage)
 - [License](#license)
+
+---
 
 ## Installation
 
 ```bash
-pnpm add react-overlay-manager           # or yarn / npm
+pnpm add @react-overlay-manager/core           # or yarn / npm
 ```
 
 ---
@@ -50,7 +53,7 @@ Use the `defineOverlay` helper for full type-safety. It injects props like `visi
 
 ```tsx
 // src/components/ConfirmDialog.tsx
-import { defineOverlay } from 'react-overlay-manager';
+import { defineOverlay } from '@react-overlay-manager/core';
 import cx from 'clsx';
 
 interface ConfirmDialogProps {
@@ -85,7 +88,7 @@ A manager holds the registry of your overlays.
 
 ```tsx
 // src/services/overlayManager.ts
-import { createOverlayManager } from 'react-overlay-manager';
+import { createOverlayManager } from '@react-overlay-manager/core';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export const overlayManager = createOverlayManager({
@@ -99,7 +102,7 @@ The `<OverlayManager>` component is responsible for rendering your overlays into
 
 ```tsx
 // src/App.tsx
-import { OverlayManager } from 'react-overlay-manager';
+import { OverlayManager } from '@react-overlay-manager/core';
 import { overlayManager } from './services/overlayManager';
 import { MyPage } from './MyPage';
 
@@ -153,7 +156,7 @@ If you don't intend to use a component registry and only want to open components
 
 ```tsx
 // src/App.tsx
-import { OverlayManager, overlays } from 'react-overlay-manager';
+import { OverlayManager, overlays } from '@react-overlay-manager/core';
 import { MyPage } from './MyPage';
 
 export default function App() {
@@ -167,7 +170,7 @@ export default function App() {
 }
 
 // Then, from any other file:
-import { overlays } from 'react-overlay-manager';
+import { overlays } from '@react-overlay-manager/core';
 import { MyDialog } from './components/MyDialog';
 
 function handleClick() {
@@ -318,7 +321,7 @@ A minimal example using pure CSS class toggle to drive animations. The manager's
 
 ```tsx
 // Spinner.tsx
-import { defineOverlay } from 'react-overlay-manager';
+import { defineOverlay } from '@react-overlay-manager/core';
 import './spinner.css';
 
 export const Spinner = defineOverlay<{}, void>(({ visible }) => {
@@ -356,7 +359,7 @@ For animation libraries, use `AnimatePresence` and call `onExitComplete` when th
 
 ```tsx
 // MotionDialog.tsx
-import { defineOverlay } from 'react-overlay-manager';
+import { defineOverlay } from '@react-overlay-manager/core';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export const MotionDialog = defineOverlay<{ title: string }, void>(
@@ -426,7 +429,7 @@ For better code-splitting, use `React.lazy` in your registry. Wrap your `<Overla
 
 ```tsx
 // overlays.ts
-import { createOverlayManager } from 'react-overlay-manager';
+import { createOverlayManager } from '@react-overlay-manager/core';
 import React, { lazy } from 'react';
 
 export const overlays = createOverlayManager({
@@ -490,7 +493,7 @@ export default function RootLayout({ children }) {
 
 // app/Providers.tsx
 ('use client');
-import { OverlayManager } from 'react-overlay-manager';
+import { OverlayManager } from '@react-overlay-manager/core';
 import { overlays } from './overlays';
 
 export function Providers({ children }) {
@@ -539,7 +542,20 @@ Consider using a html's <dialog>.
 - The library ships with CJS and ESM formats, with type definitions (`.d.ts`).
 - `react` and `react-dom` are listed as `external` dependencies.
 - The package entry point calls `enableMapSet()` from `immer` to support Map/Set in state.
-- The current version is available as an export: `import { version } from 'react-overlay-manager'`.
+- The current version is available as an export: `import { version } from '@react-overlay-manager/core'`.
+
+## Quality & Coverage
+
+- **Runtime tests**: 56 tests across 20 files, with overall coverage: **Statements 97.71%**, **Branches 87.15%**, **Functions 92.75%**, **Lines 97.71%**.
+- **Type-level tests (tsd)**: 15 focused specs across core and devtools verifying generics and API contracts:
+  - `open()` overloads and argument optionality (by key and by component)
+  - `OverlayManagerProps` shape and constraints
+  - Helper types: `ComponentProps<T>`, `OverlayResult<T>`
+  - `AnyOverlayInstance` narrowing and typed instances
+  - Event typing (`ManagerEvent<T>`) and default manager usage
+  - Branded `OverlayId` in `OpenOptions.id`
+
+These checks run in CI to prevent regressions and ensure the library remains safe to adopt.
 
 ## License
 

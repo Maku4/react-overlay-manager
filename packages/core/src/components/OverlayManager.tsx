@@ -1,3 +1,4 @@
+'use client';
 import { useEffect, useState } from 'react';
 import { useOverlayStore } from '../hooks/useOverlayStore';
 import { OverlayManagerCore } from '../manager/OverlayManagerCore';

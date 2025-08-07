@@ -73,7 +73,7 @@ describe('React integration - OverlayManager + OverlayItem', () => {
     // Get portal root after render
     const portalRoot = document.getElementById('portal-root');
 
-    let p: any;
+    let p: ReturnType<typeof overlays.open>;
     let id: OverlayId;
 
     await act(async () => {
@@ -138,7 +138,7 @@ describe('React integration - OverlayManager + OverlayItem', () => {
     // Get portal root after render
     const portalRoot = document.getElementById('portal-root-2');
 
-    let p: any;
+    let p: ReturnType<typeof overlays.open>;
     let id: OverlayId;
 
     await act(async () => {

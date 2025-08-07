@@ -1,3 +1,4 @@
+'use client';
 import { useSyncExternalStore, useRef, useCallback } from 'react';
 import { OverlayState, OverlayRegistry } from '../types';
 import { OverlayManagerCore } from '../manager/OverlayManagerCore';

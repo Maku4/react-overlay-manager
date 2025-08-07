@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import React from 'react';
 import { defineOverlay } from '../src/defineOverlay';
 import { OverlayManagerCore } from '../src/manager/OverlayManagerCore';
-import type { OverlayComponent } from '../src/types';
+import type { OverlayComponent, PromiseWithId, OverlayId } from '../src/types';
 
 type NoProps = object;
 type VoidResult = void;
@@ -9,9 +10,7 @@ type VoidResult = void;
 const Dummy: OverlayComponent<NoProps, VoidResult> = defineOverlay<
   NoProps,
   void
->(() => {
-  return null as unknown as any;
-});
+>(() => React.createElement('div'));
 
 describe('OverlayManagerCore - portal target and SSR defaults', () => {
   let originalDocument: any;
@@ -43,8 +42,10 @@ describe('OverlayManagerCore - portal target and SSR defaults', () => {
   it('per-open portalTarget null is stored as null', () => {
     const manager = new OverlayManagerCore({ dummy: Dummy });
 
-    const p = manager.open('dummy', { portalTarget: null });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', {
+      portalTarget: null,
+    });
+    const id: OverlayId = p.id;
 
     const inst = manager.getInstance(id)!;
     expect(inst.portalTarget).toBeNull();
@@ -55,8 +56,8 @@ describe('OverlayManagerCore - portal target and SSR defaults', () => {
     const el = document.createElement('div');
     document.body.appendChild(el);
 
-    const p = manager.open('dummy', { portalTarget: el });
-    const id = (p as any).id;
+    const p: PromiseWithId<void> = manager.open('dummy', { portalTarget: el });
+    const id: OverlayId = p.id;
 
     const inst = manager.getInstance(id)!;
     expect(inst.portalTarget).toBe(el);

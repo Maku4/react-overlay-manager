@@ -12,7 +12,14 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['packages/**/src/**/*.{js,ts,jsx,tsx}'],
-      exclude: ['packages/**/*.d.ts', 'packages/**/tests', 'packages/**/dist'],
+      exclude: [
+        'packages/**/*.d.ts',
+        'packages/**/tests',
+        'packages/**/dist',
+        // Exclude type-only and index barrels from coverage metrics
+        'packages/core/src/types/**',
+        'packages/core/src/index.ts',
+      ],
     },
   },
 });
