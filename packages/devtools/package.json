@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
+  "description": "Developer tools for React Overlay Manager - visual debugging and management interface",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -27,5 +28,24 @@
   "devDependencies": {
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
+  },
+  "keywords": [
+    "react",
+    "overlay",
+    "devtools",
+    "debugging",
+    "development",
+    "typescript"
+  ],
+  "author": "Mateusz Kuplowski",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Maku4/react-overlay-manager.git",
+    "directory": "packages/devtools"
+  },
+  "homepage": "https://github.com/Maku4/react-overlay-manager#readme",
+  "bugs": {
+    "url": "https://github.com/Maku4/react-overlay-manager/issues"
   }
 }

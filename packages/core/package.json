@@ -42,5 +42,14 @@
     "type-safe"
   ],
   "author": "Mateusz Kuplowski",
-  "license": "MIT"
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Maku4/react-overlay-manager.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/Maku4/react-overlay-manager#readme",
+  "bugs": {
+    "url": "https://github.com/Maku4/react-overlay-manager/issues"
+  }
 }
