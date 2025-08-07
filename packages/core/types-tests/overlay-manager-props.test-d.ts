@@ -34,12 +34,13 @@ expectAssignable<Props>({
 });
 
 // Invalid literal for stackingBehavior should be rejected
-expectError<Props>({ manager, stackingBehavior: 'invalid' as any });
+// @ts-expect-error - invalid stackingBehavior
+expectError<Props>({ manager, stackingBehavior: 'invalid' });
 
 // Ensure property types are as expected
-const _zIndex: number | undefined = ({} as Props).zIndexBase;
-const _defExit: number | null | undefined = ({} as Props).defaultExitDuration;
-const _portal: HTMLElement | null | undefined = ({} as Props).portalTarget;
+expectType<number | undefined>(({} as Props).zIndexBase);
+expectType<number | null | undefined>(({} as Props).defaultExitDuration);
+expectType<HTMLElement | null | undefined>(({} as Props).portalTarget);
 
 // Generic flow: ensure a different registry compiles
 declare function acceptProps<T extends OverlayRegistry>(
