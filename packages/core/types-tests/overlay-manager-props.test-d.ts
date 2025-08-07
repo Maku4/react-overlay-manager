@@ -34,8 +34,8 @@ expectAssignable<Props>({
 });
 
 // Invalid literal for stackingBehavior should be rejected
-// @ts-expect-error - invalid stackingBehavior
-expectError<Props>({ manager, stackingBehavior: 'invalid' });
+declare function _needsProps(p: Props): void;
+expectError(_needsProps({ manager, stackingBehavior: 'invalid' }));
 
 // Ensure property types are as expected
 expectType<number | undefined>(({} as Props).zIndexBase);
