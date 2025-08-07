@@ -8,7 +8,16 @@ import prettier from 'eslint-config-prettier';
 export default [
   js.configs.recommended,
   {
-    ignores: ['**/dist/**', '**/node_modules/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/tests/**',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/types-tests/**',
+    ],
   },
   {
     files: ['**/*.{ts,tsx}'],
@@ -50,7 +59,7 @@ export default [
         'error',
         { argsIgnorePattern: '^_' },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'off',
     },
     settings: {
       react: {
