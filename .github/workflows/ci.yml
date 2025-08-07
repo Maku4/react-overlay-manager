@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -15,33 +15,36 @@ jobs:
         node-version: [18.x, 20.x]
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    
-    - name: Install pnpm
-      uses: pnpm/action-setup@v2
-      with:
-        version: 8
-    
-    - name: Install dependencies
-      run: pnpm install --frozen-lockfile
-    
-    - name: Type check
-      run: pnpm type-check
-    
-    - name: Lint
-      run: pnpm lint
-    
-    - name: Format check
-      run: pnpm format:check
-    
-    - name: Run tests
-      run: pnpm test:coverage
-    
-    - name: Build
-      run: pnpm build 
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Run type tests (tsd)
+        run: pnpm test:types
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Run tests
+        run: pnpm test:coverage
+
+      - name: Build
+        run: pnpm build
