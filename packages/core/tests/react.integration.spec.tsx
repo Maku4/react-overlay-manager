@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { render, screen, act, cleanup } from '@testing-library/react';
 import { OverlayManager } from '../src/components/OverlayManager';
 import { createOverlayManager } from '../src/createOverlayManager';
