@@ -1,0 +1,8 @@
+*.md
+*.mdc
+*.json
+.js
+eslint.config.js
+.gitignore
+
+react-overlay-manager.xml

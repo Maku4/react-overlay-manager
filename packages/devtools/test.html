@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overlay Manager DevTools Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        border: none;
+        border-radius: 4px;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      .instructions {
+        background-color: #e3f2fd;
+        padding: 15px;
+        border-radius: 4px;
+        margin: 20px 0;
+        border-left: 4px solid #2196f3;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Overlay Manager DevTools Test</h1>
+
+      <div class="instructions">
+        <h3>Instructions:</h3>
+        <ol>
+          <li>Click the buttons below to open different overlays</li>
+          <li>
+            Look for the floating "Overlays" button in the bottom-right corner
+          </li>
+          <li>
+            Click the floating button or press <kbd>Ctrl+Shift+O</kbd> to open
+            DevTools
+          </li>
+          <li>
+            In the DevTools panel, you can:
+            <ul>
+              <li>See all active overlays with their visibility status</li>
+              <li>Click on an overlay to see its details</li>
+              <li>View the props passed to each overlay</li>
+              <li>Close or remove overlays directly from DevTools</li>
+            </ul>
+          </li>
+        </ol>
+      </div>
+
+      <div>
+        <button id="openConfirm">Open Confirm Dialog</button>
+        <button id="openAlert">Open Alert Dialog</button>
+        <button id="openMultiple">Open Multiple Overlays</button>
+      </div>
+
+      <div id="root"></div>
+    </div>
+
+    <script type="module">
+      // This would be the actual React app in a real implementation
+      // For now, this is just a placeholder to show the structure
+
+      console.log('Overlay Manager DevTools Test Page');
+      console.log('In a real React app, you would:');
+      console.log('1. Import the DevTools component');
+      console.log('2. Create an overlay manager');
+      console.log('3. Render the DevTools component with the manager');
+      console.log('4. Use the DevTools to inspect and debug overlays');
+
+      // Example of how it would be used in React:
+      /*
+        import { createOverlayManager, defineOverlay } from 'react-overlay-manager';
+        import { OverlayManagerDevtools } from '@react-overlay-manager/devtools';
+        
+        const manager = createOverlayManager({
+          confirm: defineOverlay(({ message, close }) => (
+            <div>Confirm: {message}</div>
+          )),
+        });
+        
+        function App() {
+          return (
+            <div>
+              <YourAppContent />
+              <OverlayManagerDevtools manager={manager} />
+            </div>
+          );
+        }
+        */
+    </script>
+  </body>
+</html>
