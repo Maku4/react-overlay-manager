@@ -11,7 +11,7 @@
     "format:check": "prettier --check .",
     "type-check": "pnpm -r --filter=\"./packages/*\" type-check",
     "ci:version": "pnpm changeset version",
-    "ci:publish": "pnpm build && pnpm changeset publish"
+    "ci:publish": "pnpm build && pnpm changeset publish --access public"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.5",
