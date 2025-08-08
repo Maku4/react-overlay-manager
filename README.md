@@ -1,12 +1,12 @@
 # React Overlay Manager
 
-A lightweight, **type-safe** overlay system for React with a minimal runtime footprint (small dependency on Immer) and built-in DevTools.
+A lightweight, **type-safe** overlay system for React with a minimal runtime footprint and built-in DevTools.
 
 - 📦 **Headless** – bring your own styles / animations
 - 🔒 **Fully typed** – compile-time safety for props and results
 - 🛠 **DevTools** – inspect the overlay stack in development
 - ⚡️ **Fast** – minimal state, `useSyncExternalStore` under the hood
-- 📏 **Small** – ~6.3 kB gzipped
+- 📏 **Small** – ~2.6 kB gzipped
 
 ---
 
@@ -565,7 +565,7 @@ Consider using the native HTML `<dialog>` element.
 
 - The library ships with CJS and ESM formats, with type definitions (`.d.ts`).
 - `react` and `react-dom` are listed as `external` dependencies.
-- The package entry point calls `enableMapSet()` from `immer` to support Map/Set in state.
+
 - The current version is available as an export: `import { version } from '@react-overlay-manager/core'`.
 
 ## Quality & Coverage

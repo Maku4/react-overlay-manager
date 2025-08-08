@@ -2,8 +2,8 @@
 import { createElement, CSSProperties, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useOverlayStore } from '../hooks/useOverlayStore';
-import { OverlayManagerCore } from '../manager/OverlayManagerCore';
-import { OverlayId, OverlayRegistry } from '../types';
+import type { OverlayManagerCore } from '../manager/OverlayManagerCore';
+import type { OverlayId, OverlayRegistry } from '../types';
 
 function OverlayItemComponent<TRegistry extends OverlayRegistry>({
   id,
