@@ -5,10 +5,8 @@ export default defineConfig({
   format: ['cjs', 'esm'],
   dts: true,
   splitting: false,
-  sourcemap: true,
+  sourcemap: false,
   clean: true,
   treeshake: true,
   external: ['react', 'react-dom'],
-  onSuccess:
-    'cp types-tests/*.test-d.ts dist/ && node scripts/append-tsd-imports.cjs',
 });
