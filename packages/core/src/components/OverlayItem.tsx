@@ -1,3 +1,4 @@
+'use client';
 import { createElement, CSSProperties, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useOverlayStore } from '../hooks/useOverlayStore';

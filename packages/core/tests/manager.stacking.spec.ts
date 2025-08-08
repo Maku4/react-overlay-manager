@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import React from 'react';
 import { defineOverlay } from '../src/defineOverlay';
 import { OverlayManagerCore } from '../src/manager/OverlayManagerCore';
-import type { OverlayComponent } from '../src/types';
+import type { OverlayComponent, PromiseWithId, OverlayId } from '../src/types';
 
 vi.useFakeTimers();
 
@@ -11,9 +12,7 @@ type VoidResult = void;
 const Dummy: OverlayComponent<NoProps, VoidResult> = defineOverlay<
   NoProps,
   void
->(() => {
-  return null as unknown as any;
-});
+>(() => React.createElement('div'));
 
 describe('OverlayManagerCore - stacking behavior', () => {
   let manager: OverlayManagerCore<{ dummy: typeof Dummy }>;
@@ -23,11 +22,11 @@ describe('OverlayManagerCore - stacking behavior', () => {
   });
 
   it('default is hide-previous: opening hides previous, closing shows previous', async () => {
-    const p1 = manager.open('dummy');
-    const id1 = (p1 as any).id;
+    const p1: PromiseWithId<void> = manager.open('dummy');
+    const id1: OverlayId = p1.id;
 
-    const p2 = manager.open('dummy'); // default hide-previous
-    const id2 = (p2 as any).id;
+    const p2: PromiseWithId<void> = manager.open('dummy'); // default hide-previous
+    const id2: OverlayId = p2.id;
 
     // After second open, first should be hidden
     expect(manager.getInstance(id1)!.visible).toBe(false);
@@ -44,11 +43,15 @@ describe('OverlayManagerCore - stacking behavior', () => {
   });
 
   it('stack mode: opening does not hide previous; closing top does not alter others', () => {
-    const p1 = manager.open('dummy', { stackingBehavior: 'stack' });
-    const id1 = (p1 as any).id;
+    const p1: PromiseWithId<void> = manager.open('dummy', {
+      stackingBehavior: 'stack',
+    });
+    const id1: OverlayId = p1.id;
 
-    const p2 = manager.open('dummy', { stackingBehavior: 'stack' });
-    const id2 = (p2 as any).id;
+    const p2: PromiseWithId<void> = manager.open('dummy', {
+      stackingBehavior: 'stack',
+    });
+    const id2: OverlayId = p2.id;
 
     // Both visible
     expect(manager.getInstance(id1)!.visible).toBe(true);
@@ -68,11 +71,13 @@ describe('OverlayManagerCore - stacking behavior', () => {
     // Set global to 'stack'
     manager.stackingBehavior = 'stack';
 
-    const p1 = manager.open('dummy'); // inherits global stack
-    const id1 = (p1 as any).id;
+    const p1: PromiseWithId<void> = manager.open('dummy'); // inherits global stack
+    const id1: OverlayId = p1.id;
 
-    const p2 = manager.open('dummy', { stackingBehavior: 'hide-previous' }); // override
-    const id2 = (p2 as any).id;
+    const p2: PromiseWithId<void> = manager.open('dummy', {
+      stackingBehavior: 'hide-previous',
+    }); // override
+    const id2: OverlayId = p2.id;
 
     // Because second used hide-previous, first gets hidden now
     expect(manager.getInstance(id1)!.visible).toBe(false);
@@ -88,12 +93,18 @@ describe('OverlayManagerCore - stacking behavior', () => {
 
   it('closeAll respects removal across mixed strategies', () => {
     // First opens with stack (visible), second with hide-previous (hides first), third with stack (keeps second visible)
-    const a = manager.open('dummy', { stackingBehavior: 'stack' });
-    const idA = (a as any).id;
-    const b = manager.open('dummy', { stackingBehavior: 'hide-previous' });
-    const idB = (b as any).id;
-    const c = manager.open('dummy', { stackingBehavior: 'stack' });
-    const idC = (c as any).id;
+    const a: PromiseWithId<void> = manager.open('dummy', {
+      stackingBehavior: 'stack',
+    });
+    const idA: OverlayId = a.id;
+    const b: PromiseWithId<void> = manager.open('dummy', {
+      stackingBehavior: 'hide-previous',
+    });
+    const idB: OverlayId = b.id;
+    const c: PromiseWithId<void> = manager.open('dummy', {
+      stackingBehavior: 'stack',
+    });
+    const idC: OverlayId = c.id;
 
     expect(manager.getInstance(idA)!.visible).toBe(false); // hidden by b
     expect(manager.getInstance(idB)!.visible).toBe(true);

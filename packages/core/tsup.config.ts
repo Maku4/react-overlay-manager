@@ -9,5 +9,6 @@ export default defineConfig({
   clean: true,
   treeshake: true,
   external: ['react', 'react-dom'],
-  onSuccess: 'cp types-tests/*.test-d.ts dist/',
+  onSuccess:
+    'cp types-tests/*.test-d.ts dist/ && node scripts/append-tsd-imports.cjs',
 });

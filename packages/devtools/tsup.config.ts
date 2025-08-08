@@ -7,5 +7,6 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
-  external: ['react', 'react-dom', 'react-overlay-manager'],
+  external: ['react', 'react-dom', '@react-overlay-manager/core'],
+  onSuccess: 'cp types-tests/*.test-d.ts dist/',
 });
