@@ -1,6 +1,6 @@
 # React Overlay Manager
 
-A lightweight, **type-safe** overlay system for React with a minimal runtime footprint and built-in DevTools.
+A lightweight, **type-safe** overlay system for React with a zero dependency and built-in DevTools.
 
 - 📦 **Headless** – bring your own styles / animations
 - 🔒 **Fully typed** – compile-time safety for props and results
