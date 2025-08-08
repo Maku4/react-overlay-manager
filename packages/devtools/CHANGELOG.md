@@ -1,5 +1,12 @@
 # @react-overlay-manager/devtools
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @react-overlay-manager/core@0.3.0
+
 ## 0.1.4
 
 ### Patch Changes

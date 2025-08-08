@@ -1,6 +1,6 @@
 {
   "name": "@react-overlay-manager/core",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "private": false,
   "type": "module",
   "description": "A lightweight React overlay management library with full TypeScript support",
