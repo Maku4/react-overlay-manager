@@ -15,7 +15,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist/*.js",
+    "dist/*.cjs",
+    "dist/*.d.ts"
   ],
   "sideEffects": false,
   "scripts": {
@@ -26,7 +28,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:types": "tsd"
+    "test:types": "node scripts/generate-tsd-index.cjs && tsd"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
