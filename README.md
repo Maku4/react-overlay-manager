@@ -6,6 +6,7 @@ A lightweight, **type-safe** overlay system for React with a minimal runtime foo
 - 🔒 **Fully typed** – compile-time safety for props and results
 - 🛠 **DevTools** – inspect the overlay stack in development
 - ⚡️ **Fast** – minimal state, `useSyncExternalStore` under the hood
+- 📏 **Small** – ~6.3 kB gzipped
 
 ---
 
