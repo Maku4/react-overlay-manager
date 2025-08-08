@@ -68,6 +68,16 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
   public readonly registry: TRegistry;
   constructor(registry: TRegistry) {
     this.registry = registry;
+
+    this.open = this.open.bind(this);
+    this.hide = this.hide.bind(this);
+    this.show = this.show.bind(this);
+    this.update = this.update.bind(this);
+    this.closeAll = this.closeAll.bind(this);
+    this.getOpenCount = this.getOpenCount.bind(this);
+    this.isOpen = this.isOpen.bind(this);
+    this.getInstance = this.getInstance.bind(this);
+    this.getInstancesByKey = this.getInstancesByKey.bind(this);
   }
 
   // --- Public API methods ---
