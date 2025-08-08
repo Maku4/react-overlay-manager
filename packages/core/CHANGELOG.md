@@ -1,5 +1,11 @@
 # @react-overlay-manager/core
 
+## 0.2.1
+
+### Patch Changes
+
+- chore: optimize unpacked size
+
 ## 0.2.0
 
 ### Minor Changes
