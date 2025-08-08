@@ -318,18 +318,31 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
 
         resolveFn(result as R);
 
-        // Check if this is the topmost overlay and find previous to show
-        const isTopmost =
-          this.state.overlayStack.length > 0 &&
-          this.state.overlayStack[this.state.overlayStack.length - 1] ===
-            runtimeId;
-
-        const previousOverlayIdToShow =
-          behavior === 'hide-previous' &&
-          isTopmost &&
-          this.state.overlayStack.length > 1
-            ? this.state.overlayStack[this.state.overlayStack.length - 2]
-            : null;
+        // Determine which previous overlay (if any) should be shown.
+        // We intentionally skip any trailing overlays that are in the middle
+        // of closing (not visible and awaiting removal), because relying on
+        // them being removed via CSS events can leave them on the stack for a
+        // short time. This ensures that closing an overlay always reveals the
+        // nearest non-closing overlay beneath it.
+        let previousOverlayIdToShow: OverlayId | null = null;
+        if (behavior === 'hide-previous') {
+          for (let i = this.state.overlayStack.length - 1; i >= 0; i--) {
+            const candidateId = this.state.overlayStack[i];
+            if (candidateId === runtimeId) {
+              continue;
+            }
+            const candidate = this.state.instances.get(candidateId);
+            if (!candidate) {
+              continue;
+            }
+            if (candidate.isClosing) {
+              // Skip overlays that are currently closing but not yet removed
+              continue;
+            }
+            previousOverlayIdToShow = candidateId;
+            break;
+          }
+        }
 
         // Update visibility states atomically (hide current, show previous if needed)
         const nextInstances = new Map(this.state.instances);

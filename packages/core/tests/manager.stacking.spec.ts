@@ -91,6 +91,27 @@ describe('OverlayManagerCore - stacking behavior', () => {
     expect(manager.getInstance(id1)!.visible).toBe(true);
   });
 
+  it('closing top finds nearest non-closing previous even if an intermediate overlay is closing', () => {
+    // Open A, then B; B hides A. Then open C; C hides B.
+    const a: PromiseWithId<void> = manager.open('dummy');
+    const idA: OverlayId = a.id;
+    const b: PromiseWithId<void> = manager.open('dummy');
+    const idB: OverlayId = b.id;
+    const c: PromiseWithId<void> = manager.open('dummy');
+    const idC: OverlayId = c.id;
+
+    // Close B so it becomes invisible and isClosing=true, but keep it on stack (no timer yet)
+    manager.getInstance(idB)!.close();
+
+    // Now close C (topmost). We expect A to become visible, not B (which is closing)
+    manager.defaultExitDuration = 0;
+    manager.getInstance(idC)!.close();
+    vi.advanceTimersByTime(0);
+
+    expect(manager.isOpen(idC)).toBe(false);
+    expect(manager.getInstance(idA)!.visible).toBe(true);
+  });
+
   it('closeAll respects removal across mixed strategies', () => {
     // First opens with stack (visible), second with hide-previous (hides first), third with stack (keeps second visible)
     const a: PromiseWithId<void> = manager.open('dummy', {

@@ -1,5 +1,11 @@
 # @react-overlay-manager/core
 
+## 0.3.0
+
+### Minor Changes
+
+- correctly reveal nearest nonclosing overlay when closing topmost overlay
+
 ## 0.2.2
 
 ### Patch Changes
