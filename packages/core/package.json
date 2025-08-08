@@ -7,9 +7,17 @@
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "files": [
     "dist"
   ],
+  "sideEffects": false,
   "scripts": {
     "build": "tsup",
     "type-check": "tsc -p tsconfig.json --noEmit",
@@ -30,7 +38,6 @@
     "tsd": "^0.33.0"
   },
   "dependencies": {
-    "immer": "^10.1.1"
   },
   "keywords": [
     "react",

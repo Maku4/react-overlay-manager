@@ -1,7 +1,7 @@
 'use client';
 import { useSyncExternalStore, useRef, useCallback } from 'react';
-import { OverlayState, OverlayRegistry } from '../types';
-import { OverlayManagerCore } from '../manager/OverlayManagerCore';
+import type { OverlayState, OverlayRegistry } from '../types';
+import type { OverlayManagerCore } from '../manager/OverlayManagerCore';
 
 /**
  * React hook for subscribing to overlay manager state changes.

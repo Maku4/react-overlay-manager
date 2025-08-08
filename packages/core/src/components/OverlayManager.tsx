@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useOverlayStore } from '../hooks/useOverlayStore';
-import { OverlayManagerCore } from '../manager/OverlayManagerCore';
-import { OverlayRegistry, StackingBehavior } from '../types';
+import type { OverlayManagerCore } from '../manager/OverlayManagerCore';
+import type { OverlayRegistry, StackingBehavior } from '../types';
 import { OverlayItem } from './OverlayItem';
 
 const DEFAULT_Z_INDEX_BASE = 100 as const;

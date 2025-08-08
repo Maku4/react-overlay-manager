@@ -1,4 +1,3 @@
-import { produce, WritableDraft } from 'immer';
 import type {
   AnyOverlayInstance,
   ComponentProps,
@@ -15,10 +14,7 @@ import type {
   StackingBehavior,
 } from '../types';
 import { OverlayAlreadyOpenError, OverlayNotFoundError } from '../utils/errors';
-import { ManagerEvent } from './events.types';
-import { enableMapSet } from 'immer';
-
-enableMapSet();
+import type { ManagerEvent } from './events.types';
 
 type Selector<TRegistry extends OverlayRegistry, TSelected> = (
   state: OverlayState<TRegistry>
@@ -124,15 +120,20 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     if (!this.state.instances.has(id)) {
       return;
     }
-    this.state = produce(this.state, (draft) => {
-      const instance = draft.instances.get(id);
-      if (instance) {
-        instance.visible = false;
-        if (instance.isClosing) {
-          instance.isClosing = false;
-        }
-      }
-    });
+    const nextInstances = new Map(this.state.instances);
+    const instance = nextInstances.get(id);
+    if (instance) {
+      const updated: AnyOverlayInstance<TRegistry> = {
+        ...(instance as AnyOverlayInstance<TRegistry>),
+        visible: false,
+        isClosing: false,
+      };
+      nextInstances.set(id, updated);
+      this.state = {
+        instances: nextInstances,
+        overlayStack: this.state.overlayStack,
+      };
+    }
     this.notifyListeners({ type: 'HIDE', id });
   }
 
@@ -140,13 +141,20 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     if (!this.state.instances.has(id)) {
       throw new OverlayNotFoundError(id);
     }
-    this.state = produce(this.state, (draft) => {
-      const instance = draft.instances.get(id);
-      if (instance) {
-        instance.visible = true;
-        instance.isClosing = false;
-      }
-    });
+    const nextInstances = new Map(this.state.instances);
+    const instance = nextInstances.get(id);
+    if (instance) {
+      const updated: AnyOverlayInstance<TRegistry> = {
+        ...(instance as AnyOverlayInstance<TRegistry>),
+        visible: true,
+        isClosing: false,
+      };
+      nextInstances.set(id, updated);
+      this.state = {
+        instances: nextInstances,
+        overlayStack: this.state.overlayStack,
+      };
+    }
     this.notifyListeners({ type: 'SHOW', id });
   }
 
@@ -154,12 +162,22 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     if (!this.state.instances.has(id)) {
       throw new OverlayNotFoundError(id);
     }
-    this.state = produce(this.state, (draft) => {
-      const instance = draft.instances.get(id);
-      if (instance) {
-        instance.props = { ...instance.props, ...props };
-      }
-    });
+    const nextInstances = new Map(this.state.instances);
+    const instance = nextInstances.get(id);
+    if (instance) {
+      const updated: AnyOverlayInstance<TRegistry> = {
+        ...(instance as AnyOverlayInstance<TRegistry>),
+        props: {
+          ...(instance as AnyOverlayInstance<TRegistry>).props,
+          ...props,
+        },
+      } as AnyOverlayInstance<TRegistry>;
+      nextInstances.set(id, updated);
+      this.state = {
+        instances: nextInstances,
+        overlayStack: this.state.overlayStack,
+      };
+    }
     this.notifyListeners({ type: 'UPDATE', id, props });
   }
 
@@ -304,19 +322,28 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
             : null;
 
         // Update visibility states atomically (hide current, show previous if needed)
-        this.state = produce(this.state, (draft) => {
-          const instanceToClose = draft.instances.get(runtimeId);
-          if (instanceToClose) {
-            instanceToClose.visible = false;
-            instanceToClose.isClosing = true;
+        const nextInstances = new Map(this.state.instances);
+        const instanceToClose = nextInstances.get(runtimeId);
+        if (instanceToClose) {
+          nextInstances.set(runtimeId, {
+            ...(instanceToClose as AnyOverlayInstance<TRegistry>),
+            visible: false,
+            isClosing: true,
+          });
+        }
+        if (previousOverlayIdToShow) {
+          const instanceToShow = nextInstances.get(previousOverlayIdToShow);
+          if (instanceToShow) {
+            nextInstances.set(previousOverlayIdToShow, {
+              ...(instanceToShow as AnyOverlayInstance<TRegistry>),
+              visible: true,
+            });
           }
-          if (previousOverlayIdToShow) {
-            const instanceToShow = draft.instances.get(previousOverlayIdToShow);
-            if (instanceToShow) {
-              instanceToShow.visible = true;
-            }
-          }
-        });
+        }
+        this.state = {
+          instances: nextInstances,
+          overlayStack: this.state.overlayStack,
+        };
 
         this.notifyListeners({ type: 'HIDE', id: runtimeId });
         if (previousOverlayIdToShow) {
@@ -374,20 +401,19 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
 
     const instance = key ? Object.assign(instanceBase, { key }) : instanceBase;
 
-    this.state = produce(this.state, (draft) => {
-      draft.instances.set(
-        runtimeId,
-        instance as WritableDraft<AnyOverlayInstance<TRegistry>>
-      );
-      draft.overlayStack.push(runtimeId);
-
-      if (previousOverlayId) {
-        const prev = draft.instances.get(previousOverlayId);
-        if (prev) {
-          prev.visible = false;
-        }
+    const nextInstances = new Map(this.state.instances);
+    nextInstances.set(runtimeId, instance as AnyOverlayInstance<TRegistry>);
+    if (previousOverlayId) {
+      const prev = nextInstances.get(previousOverlayId);
+      if (prev) {
+        nextInstances.set(previousOverlayId, {
+          ...(prev as AnyOverlayInstance<TRegistry>),
+          visible: false,
+        });
       }
-    });
+    }
+    const nextStack = [...this.state.overlayStack, runtimeId];
+    this.state = { instances: nextInstances, overlayStack: nextStack };
 
     this.notifyListeners({ type: 'OPEN', id: runtimeId, key, component });
     if (previousOverlayId) {
@@ -411,11 +437,10 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     this.closedOnce.delete(id);
 
     this.promises.delete(id);
-
-    this.state = produce(this.state, (draft) => {
-      draft.instances.delete(id);
-      draft.overlayStack = draft.overlayStack.filter((i) => i !== id);
-    });
+    const nextInstances = new Map(this.state.instances);
+    nextInstances.delete(id);
+    const nextStack = this.state.overlayStack.filter((i) => i !== id);
+    this.state = { instances: nextInstances, overlayStack: nextStack };
 
     this.notifyListeners({ type: 'REMOVE', id });
   }
