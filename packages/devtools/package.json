@@ -49,5 +49,8 @@
   "homepage": "https://github.com/Maku4/react-overlay-manager#readme",
   "bugs": {
     "url": "https://github.com/Maku4/react-overlay-manager/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
