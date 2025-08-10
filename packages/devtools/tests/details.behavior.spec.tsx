@@ -51,4 +51,25 @@ describe('OverlayDetails behavior', () => {
     await Promise.resolve();
     expect(await screen.findByText(/Instance not found/)).toBeInTheDocument();
   });
+
+  it('supports Show/Hide toggle in actions', async () => {
+    const overlays = createOverlayManager({ dlg: Dlg });
+    const p: PromiseWithId<void> = overlays.open('dlg', { label: 'Y' });
+    const id = p.id;
+    await Promise.resolve();
+
+    render(<OverlayDetails manager={overlays} instanceId={id} />);
+
+    // Hide action
+    const hideBtn = await screen.findByRole('button', { name: 'Hide' });
+    hideBtn.click();
+    await Promise.resolve();
+    expect(overlays.getInstance(id)!.visible).toBe(false);
+
+    // Show action
+    const showBtn = await screen.findByRole('button', { name: 'Show' });
+    showBtn.click();
+    await Promise.resolve();
+    expect(overlays.getInstance(id)!.visible).toBe(true);
+  });
 });

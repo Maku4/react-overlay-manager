@@ -28,6 +28,23 @@ export function Devtools<TRegistry extends OverlayRegistry>({
   useEffect(() => {
     const KEY_TOGGLE = 'O' as const;
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore if typing in inputs or contenteditable
+      const isEditableElement = (el: HTMLElement | null): boolean => {
+        if (!el) return false;
+        const tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return true;
+        if (el.isContentEditable) return true;
+        const attr = el.getAttribute?.('contenteditable');
+        return attr !== null && attr !== undefined;
+      };
+      const target = event.target as HTMLElement | null;
+      const active = (
+        typeof document !== 'undefined'
+          ? (document.activeElement as HTMLElement | null)
+          : null
+      ) as HTMLElement | null;
+      if (isEditableElement(target) || isEditableElement(active)) return;
+
       if (
         (event.ctrlKey || event.metaKey) &&
         event.shiftKey &&
@@ -78,7 +95,11 @@ export function Devtools<TRegistry extends OverlayRegistry>({
     };
 
     btn.addEventListener('mousedown', onMouseDown);
-    return () => btn.removeEventListener('mousedown', onMouseDown);
+    return () => {
+      btn.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
   }, []);
 
   return (

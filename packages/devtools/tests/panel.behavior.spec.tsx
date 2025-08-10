@@ -53,4 +53,36 @@ describe('DevtoolsPanel interactions', () => {
     const badgesText = rows2.map((r) => r.textContent || '').join(' ');
     expect(badgesText).toMatch(/Hidden/);
   });
+
+  it('panel header is draggable and updates position', async () => {
+    const overlays = createOverlayManager({ dlg: Dlg });
+    render(<DevtoolsPanel manager={overlays} closePanel={() => {}} />);
+
+    const header = await screen.findByTestId('rom-panel-header');
+    const panel = await screen.findByTestId('rom-panel');
+    const beforeTop = (panel as HTMLElement).style.top;
+    const beforeLeft = (panel as HTMLElement).style.left;
+
+    // Drag the header
+    fireEvent.mouseDown(header, { clientX: 100, clientY: 100 });
+    fireEvent.mouseMove(document, { clientX: 140, clientY: 160 });
+    fireEvent.mouseUp(document);
+
+    expect((panel as HTMLElement).style.top).not.toBe(beforeTop);
+    expect((panel as HTMLElement).style.left).not.toBe(beforeLeft);
+  });
+
+  it('Escape triggers close handler', async () => {
+    const overlays = createOverlayManager({ dlg: Dlg });
+    const closeSpy = vi.fn();
+    render(<DevtoolsPanel manager={overlays} closePanel={closeSpy} />);
+
+    const closeBtn = await screen.findByRole('button', {
+      name: 'Close DevTools',
+    });
+    expect(closeBtn).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(closeSpy).toHaveBeenCalled();
+  });
 });

@@ -75,6 +75,39 @@ describe('Devtools - keyboard toggle and draggable button', () => {
     fireEvent.mouseUp(document);
   });
 
+  it('ignores shortcut when typing in input', async () => {
+    const overlays = createOverlayManager({ dlg: Dlg });
+    render(
+      <div>
+        <input aria-label="Some Input" />
+        <Devtools manager={overlays} />
+      </div>
+    );
+
+    const input = await screen.findByLabelText('Some Input');
+    input.focus();
+    fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, key: 'o' });
+    // Panel should not open when typing in input
+    expect(sessionStorage.getItem('rom-devtools-open')).not.toBe('1');
+  });
+
+  it('ignores shortcut when typing in contenteditable', async () => {
+    const overlays = createOverlayManager({ dlg: Dlg });
+    render(
+      <div>
+        <div aria-label="Editable" contentEditable tabIndex={0} />
+        <Devtools manager={overlays} />
+      </div>
+    );
+
+    const editable = await screen.findByLabelText('Editable');
+    editable.focus();
+    // Fire a focus event to ensure JSDOM updates activeElement
+    fireEvent.focus(editable);
+    fireEvent.keyDown(editable, { metaKey: true, shiftKey: true, key: 'o' });
+    expect(sessionStorage.getItem('rom-devtools-open')).not.toBe('1');
+  });
+
   it('handles sessionStorage get/set errors gracefully', async () => {
     const getSpy = vi
       .spyOn(window.sessionStorage, 'getItem')

@@ -225,10 +225,12 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               Close
             </button>
             <button
-              onClick={() => instance.close()}
+              onClick={() =>
+                instance.visible ? instance.hide() : manager.show(instance.id)
+              }
               style={{
                 padding: '6px 12px',
-                backgroundColor: '#d73a49',
+                backgroundColor: instance.visible ? '#6c757d' : '#2da44e',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
@@ -237,7 +239,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
                 fontWeight: 700,
               }}
             >
-              Remove
+              {instance.visible ? 'Hide' : 'Show'}
             </button>
           </div>
         </div>
