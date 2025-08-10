@@ -1,6 +1,6 @@
 {
   "name": "@react-overlay-manager/devtools",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "private": false,
   "type": "module",
   "description": "Developer tools for React Overlay Manager - visual debugging and management interface",
