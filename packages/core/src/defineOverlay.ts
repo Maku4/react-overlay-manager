@@ -14,7 +14,7 @@ import type { OverlayComponent, InjectedOverlayProps } from './types';
  * }
  *
  * export const MyDialog = defineOverlay<MyDialogProps, boolean>(
- *   ({ title, message, visible, close, remove }) => {
+ *   ({ title, message, visible, close, onExitComplete }) => {
  *     // Component implementation
  *     return <div>...</div>;
  *   }
