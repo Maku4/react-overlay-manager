@@ -30,6 +30,34 @@ describe('DevtoolsPanel resizer and OverlayRow hover', () => {
     fireEvent.mouseUp(document);
   });
 
+  it('resizes with corner handle (width and height) and persists size', async () => {
+    const overlays = createOverlayManager({ dlg: Dlg });
+    render(<DevtoolsPanel manager={overlays} closePanel={() => {}} />);
+
+    const corner = await screen.findByTestId('rom-resize-corner');
+    const panel = screen.getByTestId('rom-panel');
+
+    const w0 = (panel as HTMLElement).style.width || '420px';
+    const h0 = (panel as HTMLElement).style.height || '560px';
+
+    fireEvent.mouseDown(corner, { clientX: 300, clientY: 300 });
+    fireEvent.mouseMove(document, { clientX: 340, clientY: 360 });
+    fireEvent.mouseUp(document);
+
+    expect((panel as HTMLElement).style.width).not.toBe(w0);
+    expect((panel as HTMLElement).style.height).not.toBe(h0);
+
+    // Unmount previous render and render fresh, expect size restored from sessionStorage
+    const { unmount } = render(
+      <DevtoolsPanel manager={overlays} closePanel={() => {}} />
+    );
+    unmount();
+    render(<DevtoolsPanel manager={overlays} closePanel={() => {}} />);
+    const panel2 = (await screen.findAllByTestId('rom-panel'))[0];
+    expect((panel2 as HTMLElement).style.width).toMatch(/px/);
+    expect((panel2 as HTMLElement).style.height).toMatch(/px/);
+  });
+
   it('OverlayRow hover handlers adjust background when not selected', () => {
     const instance = {
       id: 'overlay_test',

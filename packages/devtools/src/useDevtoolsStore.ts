@@ -13,7 +13,10 @@ export function useDevtoolsStore<
   selector: (state: OverlayState<TRegistry>) => TSelected
 ): TSelected {
   return useSyncExternalStore(
-    (onStoreChange) => manager.subscribe(() => onStoreChange()),
+    (onStoreChange) =>
+      manager.subscribeWithSelector(selector, () => {
+        onStoreChange();
+      }),
     () => selector(manager.getState()),
     () => selector(manager.getState())
   );

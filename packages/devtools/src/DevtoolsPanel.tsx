@@ -21,6 +21,14 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
   manager,
   closePanel,
 }: DevtoolsPanelProps<TRegistry>) {
+  const STORAGE_SIZE_KEY = 'rom-devtools-panel-size';
+  const STORAGE_POS_KEY = 'rom-devtools-panel-pos';
+  const MIN_WIDTH = 320;
+  const MAX_WIDTH = 800;
+  const MIN_HEIGHT = 300;
+  const MAX_HEIGHT = 800;
+  const DEFAULT_WIDTH = 420;
+  const DEFAULT_HEIGHT = 560;
   const [selectedId, setSelectedId] = useState<OverlayId | null>(() => {
     try {
       const v = sessionStorage.getItem('rom-devtools-selected');
@@ -33,6 +41,72 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
   const [sort, setSort] = useState<SortKey>('recent');
 
   const state = useDevtoolsStore(manager, (s) => s);
+
+  // Draggable position persisted in sessionStorage
+  const [position, setPosition] = useState<{ top: number; left: number }>(
+    () => {
+      try {
+        const raw = sessionStorage.getItem(STORAGE_POS_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { top?: number; left?: number };
+          const top = Number.isFinite(parsed.top)
+            ? Math.max(
+                8,
+                Math.min(
+                  (typeof window !== 'undefined'
+                    ? window.innerHeight
+                    : DEFAULT_HEIGHT) - 48,
+                  parsed.top as number
+                )
+              )
+            : 20;
+          const left = Number.isFinite(parsed.left)
+            ? Math.max(
+                8,
+                Math.min(
+                  (typeof window !== 'undefined'
+                    ? window.innerWidth
+                    : MAX_WIDTH) - MIN_WIDTH,
+                  parsed.left as number
+                )
+              )
+            : Math.max(
+                8,
+                (typeof window !== 'undefined'
+                  ? window.innerWidth
+                  : DEFAULT_WIDTH) -
+                  DEFAULT_WIDTH -
+                  20
+              );
+          return { top, left };
+        }
+      } catch {}
+      return {
+        top: 20,
+        left: Math.max(
+          8,
+          (typeof window !== 'undefined' ? window.innerWidth : DEFAULT_WIDTH) -
+            DEFAULT_WIDTH -
+            20
+        ),
+      };
+    }
+  );
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(STORAGE_POS_KEY, JSON.stringify(position));
+    } catch {}
+  }, [position]);
+
+  // Close panel via Escape for quick exit
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePanel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [closePanel]);
 
   useEffect(() => {
     try {
@@ -76,12 +150,14 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
     return sorted;
   }, [state.overlayStack, state.instances, query, sort]);
 
-  // Resizable panel
+  // Resizable panel (bottom bar + optional corner)
   const panelRef = useRef<HTMLDivElement | null>(null);
   const resizerRef = useRef<HTMLDivElement | null>(null);
+  const cornerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const panel = panelRef.current;
     const resizer = resizerRef.current;
+    const corner = cornerRef.current;
     if (!panel || !resizer) return;
 
     let startX = 0;
@@ -92,17 +168,34 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
     const onMouseDown = (e: MouseEvent) => {
       startX = e.clientX;
       startY = e.clientY;
-      startW = panel.offsetWidth;
-      startH = panel.offsetHeight;
+      startW =
+        panel.offsetWidth || parseInt(panel.style.width || '') || DEFAULT_WIDTH;
+      startH =
+        panel.offsetHeight ||
+        parseInt(panel.style.height || '') ||
+        DEFAULT_HEIGHT;
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
       e.preventDefault();
     };
     const onMouseMove = (e: MouseEvent) => {
-      const newW = Math.min(Math.max(320, startW - (e.clientX - startX)), 800);
-      const newH = Math.min(Math.max(300, startH + (e.clientY - startY)), 800);
+      // Resize only height by default for better UX; width constrained but not actively resized
+      const newW = Math.min(
+        Math.max(MIN_WIDTH, startW - (e.clientX - startX)),
+        MAX_WIDTH
+      );
+      const newH = Math.min(
+        Math.max(MIN_HEIGHT, startH + (e.clientY - startY)),
+        MAX_HEIGHT
+      );
       panel.style.width = `${newW}px`;
       panel.style.height = `${newH}px`;
+      try {
+        sessionStorage.setItem(
+          'rom-devtools-panel-size',
+          JSON.stringify({ w: newW, h: newH })
+        );
+      } catch {}
     };
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
@@ -110,22 +203,162 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
     };
 
     resizer.addEventListener('mousedown', onMouseDown);
-    return () => resizer.removeEventListener('mousedown', onMouseDown);
+
+    // Corner handle for width+height resize
+    let onCornerDown: ((e: MouseEvent) => void) | null = null;
+    let onCornerMove: ((e: MouseEvent) => void) | null = null;
+    let onCornerUp: (() => void) | null = null;
+    if (corner) {
+      onCornerDown = (e: MouseEvent) => {
+        startX = e.clientX;
+        startY = e.clientY;
+        startW =
+          panel.offsetWidth ||
+          parseInt(panel.style.width || '') ||
+          DEFAULT_WIDTH;
+        startH =
+          panel.offsetHeight ||
+          parseInt(panel.style.height || '') ||
+          DEFAULT_HEIGHT;
+        document.addEventListener('mousemove', onCornerMove!);
+        document.addEventListener('mouseup', onCornerUp!);
+        e.preventDefault();
+      };
+      onCornerMove = (e: MouseEvent) => {
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newW = Math.min(Math.max(MIN_WIDTH, startW + dx), MAX_WIDTH);
+        const newH = Math.min(Math.max(MIN_HEIGHT, startH + dy), MAX_HEIGHT);
+        panel.style.width = `${newW}px`;
+        panel.style.height = `${newH}px`;
+        try {
+          sessionStorage.setItem(
+            STORAGE_SIZE_KEY,
+            JSON.stringify({ w: newW, h: newH })
+          );
+        } catch {}
+      };
+      onCornerUp = () => {
+        document.removeEventListener('mousemove', onCornerMove!);
+        document.removeEventListener('mouseup', onCornerUp!);
+      };
+      corner.addEventListener('mousedown', onCornerDown);
+    }
+
+    return () => {
+      resizer.removeEventListener('mousedown', onMouseDown);
+      if (corner && onCornerDown)
+        corner.removeEventListener('mousedown', onCornerDown);
+    };
+  }, []);
+
+  // Draggable header to move panel around
+  const headerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const header = headerRef.current;
+    const panel = panelRef.current;
+    if (!header || !panel) return;
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let origTop = 0;
+    let origLeft = 0;
+
+    const onHeaderDown = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('button, a, input, select, textarea'))
+        return;
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      origTop = panel.offsetTop;
+      origLeft = panel.offsetLeft;
+      document.addEventListener('mousemove', onHeaderMove);
+      document.addEventListener('mouseup', onHeaderUp);
+      e.preventDefault();
+    };
+    const onHeaderMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const nextTop = Math.max(
+        8,
+        Math.min(
+          (typeof window !== 'undefined' ? window.innerHeight : MAX_HEIGHT) -
+            48,
+          origTop + dy
+        )
+      );
+      const panelWidth = panel.offsetWidth || DEFAULT_WIDTH;
+      const maxLeft =
+        (typeof window !== 'undefined' ? window.innerWidth : MAX_WIDTH) -
+        panelWidth -
+        8;
+      const nextLeft = Math.max(8, Math.min(maxLeft, origLeft + dx));
+      setPosition({ top: nextTop, left: nextLeft });
+    };
+    const onHeaderUp = () => {
+      dragging = false;
+      document.removeEventListener('mousemove', onHeaderMove);
+      document.removeEventListener('mouseup', onHeaderUp);
+    };
+
+    header.addEventListener('mousedown', onHeaderDown);
+    return () => header.removeEventListener('mousedown', onHeaderDown);
+  }, []);
+
+  // Keep within viewport on resize
+  useEffect(() => {
+    const onResize = () => {
+      const panel = panelRef.current;
+      if (!panel) return;
+      const panelWidth = panel.offsetWidth || DEFAULT_WIDTH;
+      const maxLeft =
+        (typeof window !== 'undefined' ? window.innerWidth : MAX_WIDTH) -
+        panelWidth -
+        8;
+      const maxTop =
+        (typeof window !== 'undefined' ? window.innerHeight : DEFAULT_HEIGHT) -
+        48;
+      setPosition((p) => ({
+        top: Math.min(p.top, maxTop),
+        left: Math.min(p.left, maxLeft),
+      }));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   return (
     <div
       ref={panelRef}
+      data-testid="rom-panel"
       style={{
         position: 'fixed',
-        top: '20px',
-        right: '20px',
-        width: '420px',
-        height: '560px',
-        backgroundColor: '#fff',
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        width: (() => {
+          try {
+            const raw = sessionStorage.getItem(STORAGE_SIZE_KEY);
+            if (raw)
+              return `${Math.max(320, Math.min(800, JSON.parse(raw).w))}px`;
+          } catch {}
+          return '420px';
+        })(),
+        height: (() => {
+          try {
+            const raw = sessionStorage.getItem(STORAGE_SIZE_KEY);
+            if (raw)
+              return `${Math.max(300, Math.min(800, JSON.parse(raw).h))}px`;
+          } catch {}
+          return '560px';
+        })(),
+        backgroundColor: '#ffffff',
         border: '1px solid #d0d7de',
-        borderRadius: '10px',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+        borderRadius: '12px',
+        boxShadow: '0 16px 40px rgba(0,0,0,0.22)',
         zIndex: 10000,
         fontFamily:
           'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
@@ -133,20 +366,32 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        backdropFilter: 'saturate(1.1)',
       }}
     >
       <header
+        ref={headerRef}
+        data-testid="rom-panel-header"
         style={{
           padding: '10px 12px',
-          borderBottom: '1px solid #eee',
+          borderBottom: '1px solid #e6ebf1',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          backgroundColor: '#f6f8fa',
+          background:
+            'linear-gradient(180deg, rgba(246,248,250,1) 0%, rgba(240,243,247,1) 100%)',
+          cursor: 'move',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <h2 style={{ margin: 0, fontSize: '13px', fontWeight: 700 }}>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: '13px',
+              fontWeight: 700,
+              letterSpacing: 0.2,
+            }}
+          >
             Overlay Manager DevTools
           </h2>
           <span
@@ -170,13 +415,15 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
             onClick={closePanel}
             aria-label="Close DevTools"
             style={{
-              background: 'none',
+              background: '#ffffff',
               border: '1px solid #d0d7de',
               fontSize: '14px',
               cursor: 'pointer',
               padding: '2px 8px',
-              borderRadius: '6px',
+              borderRadius: '8px',
               lineHeight: 1.2,
+              transition:
+                'background-color 120ms ease, border-color 120ms ease',
             }}
           >
             ×
@@ -292,9 +539,27 @@ export function DevtoolsPanel<TRegistry extends OverlayRegistry>({
         style={{
           height: '8px',
           cursor: 'ns-resize',
-          borderTop: '1px solid #eee',
+          borderTop: '1px solid #e6ebf1',
           background:
             'repeating-linear-gradient(90deg, #f6f8fa, #f6f8fa 6px, #eef1f4 6px, #eef1f4 12px)',
+        }}
+      />
+
+      {/* Bottom-right corner resize handle */}
+      <div
+        ref={cornerRef}
+        aria-hidden
+        data-testid="rom-resize-corner"
+        style={{
+          position: 'absolute',
+          width: '12px',
+          height: '12px',
+          right: '6px',
+          bottom: '6px',
+          cursor: 'nwse-resize',
+          background:
+            'linear-gradient(135deg, transparent 40%, #c9d1d9 40%, #c9d1d9 60%, transparent 60%)',
+          borderRadius: '2px',
         }}
       />
     </div>
