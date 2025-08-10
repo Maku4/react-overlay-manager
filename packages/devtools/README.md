@@ -2,67 +2,71 @@
 
 Developer tools for `react-overlay-manager` that provide real-time visualization and debugging capabilities for overlay management.
 
-## Features
+## Highlights
 
-- **Real-time State Visualization**: See all active overlays and their current state
-- **Interactive Debugging**: Close, remove, and inspect overlays directly from the DevTools
-- **Props Inspection**: View and inspect the props passed to each overlay
-- **Keyboard Shortcuts**: Use `Ctrl+Shift+O` to toggle the DevTools panel
-- **Development Only**: Automatically disabled in production builds
+- **Real-time state**: Inspect the current overlay stack with live updates
+- **Interactive debugging**: Close and Show/Hide overlays, copy ID and props JSON, and view basic metadata
+- **Search & sort**: Filter by name/ID, sort by Recent, Visible first, or Name
+- **Professional UX**: Draggable panel, resizable via bottom bar and bottom-right corner, position/size persist across sessions
+- **Quick access**: Floating badge button (draggable) shows active count; keyboard shortcuts to toggle/close
+- **Development-only**: Automatically a no-op in production builds
 
 ## Installation
 
 ```bash
-npm install @react-overlay-manager/devtools --save-dev
+pnpm add -D @react-overlay-manager/devtools
+# or: npm i -D @react-overlay-manager/devtools
 ```
 
 ## Usage
 
-Simply import and use the `OverlayManagerDevtools` component in your app:
+Render the DevTools next to your `OverlayManager`. It automatically renders nothing in production.
 
 ```tsx
 import { OverlayManagerDevtools } from '@react-overlay-manager/devtools';
-import { createOverlayManager } from 'react-overlay-manager';
+import {
+  OverlayManager,
+  createOverlayManager,
+} from '@react-overlay-manager/core';
 
-// Create your overlay manager
 const manager = createOverlayManager(yourRegistry);
 
 function App() {
   return (
-    <div>
+    <>
       {/* Your app content */}
-
-      {/* DevTools - only renders in development */}
+      <OverlayManager manager={manager} />
+      {/* DevTools renders only in development */}
       <OverlayManagerDevtools manager={manager} />
-    </div>
+    </>
   );
 }
 ```
 
-## Features
+## UI/UX Details
 
-### Floating Button
+- **Floating button**
+  - Bottom-right by default, shows label "Overlays" and a live count
+  - Draggable; position persists while the app is running
+  - Click to open the panel
 
-A small floating button appears in the bottom-right corner of your app, showing "Overlays" with the current count.
+- **Panel**
+  - **Drag to move**: grab the header to reposition the window; position is clamped to the viewport and persisted
+  - **Resize**: drag the bottom bar (height) or the bottom-right corner (width & height); size persists
+  - **Search & sort**: filter by name or ID; sort by Recent, Visible first, or Name
+  - **List**: shows each overlay with a visibility badge and ID
+  - **Details**: when selected, see component name, ID, visibility, props (pretty/raw), and actions
+    - Actions: Close; Show/Hide toggle; Copy ID; Copy props JSON
 
-### DevTools Panel
-
-Click the floating button or use `Ctrl+Shift+O` to open the DevTools panel, which includes:
-
-- **Overlay List**: Shows all active overlays with their visibility status
-- **Details Panel**: When an overlay is selected, shows:
-  - Component name and ID
-  - Visibility status
-  - Props (formatted JSON)
-  - Action buttons (Close, Remove)
-
-### Keyboard Shortcuts
-
-- `Ctrl+Shift+O`: Toggle DevTools panel
+- **Keyboard shortcuts**
+  - Toggle open/close: `Ctrl/⌘ + Shift + O`
+  - Close panel: `Escape`
+  - Shortcuts are ignored while typing in `input`, `textarea`, or `contenteditable` targets
 
 ## Development
 
-This package is designed to be used only in development mode. In production builds, the component renders `null` automatically.
+- DevTools are exported as `OverlayManagerDevtools`, which is a pass-through to the real component in development and a `null` component in production
+- Built with React + TypeScript and inline styles to avoid conflicts
 
 ## Building
 
@@ -73,4 +77,4 @@ pnpm build
 
 ## Contributing
 
-The DevTools are built using React and TypeScript, with inline styles to avoid conflicts with your application's styling.
+Contributions welcome! Please run the test suite in the monorepo root before submitting PRs.
