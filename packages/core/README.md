@@ -570,7 +570,7 @@ Consider using the native HTML `<dialog>` element.
 
 ## Quality & Coverage
 
-- **Runtime tests**: 56 tests across 20 files, with overall coverage: **Statements 97.71%**, **Branches 87.15%**, **Functions 92.75%**, **Lines 97.71%**.
+- **Runtime tests**: 66 tests across 22 files, with overall coverage: **Statements 96.82%**, **Branches 85.29%**, **Functions 94.87%**, **Lines 96.82%**.
 - **Type-level tests (tsd)**: 15 focused specs across core and devtools verifying generics and API contracts:
   - `open()` overloads and argument optionality (by key and by component)
   - `OverlayManagerProps` shape and constraints
