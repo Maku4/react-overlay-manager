@@ -1,5 +1,11 @@
 # @react-overlay-manager/core
 
+## 0.3.1
+
+### Patch Changes
+
+- docs update
+
 ## 0.3.0
 
 ### Minor Changes
