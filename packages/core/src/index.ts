@@ -1,3 +1,5 @@
+declare const __VERSION__: string;
+
 // Core factory
 export { createOverlayManager, overlays } from './createOverlayManager';
 
@@ -43,4 +45,4 @@ export type { OverlayManagerProps } from './components/OverlayManager';
 export { OverlayAlreadyOpenError, OverlayNotFoundError } from './utils/errors';
 
 // Version
-export const version = '0.1.0';
+export const version = __VERSION__;
