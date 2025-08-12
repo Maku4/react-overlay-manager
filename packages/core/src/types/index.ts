@@ -1,4 +1,5 @@
 import { ComponentType } from 'react';
+import type { OverlayManagerCore } from '../manager/OverlayManagerCore';
 
 /* ---------------------------------------------------------------- *\
  *  Core Primitives
@@ -16,6 +17,18 @@ export type OverlayId = string & { readonly __brand: 'OverlayId' };
  */
 export interface PromiseWithId<T> extends Promise<T> {
   id: OverlayId;
+}
+
+export interface OverlayManagerBase {
+  open<P, R>(
+    component: OverlayComponent<P, R>,
+    options: OpenOptions<P>
+  ): PromiseWithId<R>;
+  /**
+   * Narrow this manager to a typed `OverlayManagerCore` with a known registry.
+   * This is a purely type-level helper and has no runtime cost.
+   */
+  as<TReg extends OverlayRegistry>(): OverlayManagerCore<TReg>;
 }
 
 /**
@@ -36,6 +49,7 @@ export interface InjectedOverlayProps<TResult = unknown> {
    * Required for manual removal when not using `exitDuration`.
    */
   onExitComplete: () => void;
+  manager: OverlayManagerBase;
 }
 
 /**
@@ -123,7 +137,11 @@ export type OverlayRegistry = Record<
  * @template P The component's own props.
  * @template R The component's result type.
  */
-export interface OverlayInstance<P = object, R = unknown> {
+export interface OverlayInstance<
+  P = object,
+  R = unknown,
+  TRegistry extends OverlayRegistry = any,
+> {
   id: OverlayId;
   component: OverlayComponent<P, R>;
   props: P;
@@ -136,6 +154,7 @@ export interface OverlayInstance<P = object, R = unknown> {
   portalTarget: HTMLElement | null;
   /** The stacking behavior used for this specific overlay instance. */
   stackingBehavior: StackingBehavior;
+  manager: OverlayManagerCore<TRegistry>;
 }
 
 /**

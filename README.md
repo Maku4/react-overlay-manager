@@ -483,6 +483,53 @@ try {
 }
 ```
 
+### Nested overlays with the injected manager (concise and type-safe)
+
+Overlays receive a `manager` prop. Use it to open other overlays (nested modals) and keep
+key-based typing by narrowing with `manager.as<...>()`. This avoids circular imports when the
+overlay is part of the same registry.
+
+- **Why**
+  - Avoids circular types/imports
+  - Keeps nested `open('key', ...)` fully type-safe
+
+Define your manager in a separate module and export its type:
+
+```ts
+import { createOverlayManager } from '@react-overlay-manager/core';
+import { ValidationModal } from '../components/ValidationModal';
+// ...other overlays
+
+export const overlayManager = createOverlayManager({
+  validationModal: ValidationModal,
+  // confirmModal: ConfirmModal, ...
+});
+
+export type AppOverlayManager = typeof overlayManager;
+```
+
+````ts
+import type { AppOverlayManager } from '../services/overlayManager';
+
+export const ValidationModal = defineOverlay<ValidationModalProps, void>(
+  ({ manager, ...props }) => {
+    manager
+      .as<AppOverlayManager['registry']>()
+      .open('confirmModal', { /* ... */ });
+
+    // or open by component directly (no key)
+    // manager.open(ConfirmModal, { /* ... */ });
+    return null;
+  }
+);
+
+You can also dynamically import the manager to avoid circular imports:
+
+```ts
+const { overlayManager } = await import('../services/overlayManager');
+overlayManager.open('confirmModal', { /* ... */ });
+````
+
 ---
 
 ## Edge Cases & Error Handling
@@ -570,7 +617,7 @@ Consider using the native HTML `<dialog>` element.
 
 ## Quality & Coverage
 
-- **Runtime tests**: 66 tests across 22 files, with overall coverage: **Statements 96.82%**, **Branches 85.29%**, **Functions 94.87%**, **Lines 96.82%**.
+- **Runtime tests**: 66 tests across 22 files, with overall coverage: **Statements 96.64%**, **Branches 85.25%**, **Functions 93.67%**, **Lines 96.64%**.
 - **Type-level tests (tsd)**: 15 focused specs across core and devtools verifying generics and API contracts:
   - `open()` overloads and argument optionality (by key and by component)
   - `OverlayManagerProps` shape and constraints

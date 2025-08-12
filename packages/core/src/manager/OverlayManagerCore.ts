@@ -83,6 +83,16 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
   // --- Public API methods ---
 
   /**
+   * Narrow this manager instance to a specific registry type for stronger typing in consumers.
+   * This is a purely type-level assertion with no runtime cost.
+   */
+  public as<
+    NewRegistry extends OverlayRegistry,
+  >(): OverlayManagerCore<NewRegistry> {
+    return this as unknown as OverlayManagerCore<NewRegistry>;
+  }
+
+  /**
    * Opens an overlay by its key in the registry or by passing the component directly.
    * This method uses conditional types to provide strict type-safety for the `options`
    * argument based on the first argument.
@@ -118,12 +128,17 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
       typeof keyOrComponent === 'number'
     ) {
       const key = keyOrComponent as keyof TRegistry;
-      const component = this.registry[key] as OverlayComponent<any, any>;
-      return this._createAndAddInstance(component, options, key) as any;
-    } else {
-      const component = keyOrComponent as OverlayComponent<any, any>;
-      return this._createAndAddInstance(component, options) as any;
+      const component = this.registry[key] as TRegistry[keyof TRegistry];
+      return this._createAndAddInstance(
+        component as OverlayComponent<any, any>,
+        options,
+        key
+      ) as any;
     }
+    return this._createAndAddInstance(
+      keyOrComponent as OverlayComponent<any, any>,
+      options
+    ) as any;
   }
 
   public hide(id: OverlayId) {
@@ -298,14 +313,15 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
 
     const cleanProps = this.stripInternalOptions(options) as P;
 
-    const instanceBase: OverlayInstance<P, R> = {
+    const instanceBase: OverlayInstance<P, R, TRegistry> = {
       id: runtimeId,
       component,
-      props: cleanProps,
+      props: { ...cleanProps, manager: this },
       visible: true,
       isClosing: false,
       portalTarget,
       stackingBehavior: behavior,
+      manager: this,
       hide: () => {
         this.hide(runtimeId);
       },
