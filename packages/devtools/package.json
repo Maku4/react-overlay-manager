@@ -1,6 +1,6 @@
 {
   "name": "@react-overlay-manager/devtools",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": false,
   "type": "module",
   "description": "Developer tools for React Overlay Manager - visual debugging and management interface",
@@ -27,8 +27,8 @@
     "@react-overlay-manager/core": "workspace:*"
   },
   "devDependencies": {
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "tsd": "^0.33.0"
   },
   "keywords": [
