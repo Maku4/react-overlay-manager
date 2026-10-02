@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import console from 'node:console';
 import process from 'node:process';
+import { Buffer } from 'node:buffer';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import {
@@ -13,14 +14,33 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  checkProvenance,
+  checkRegistryVersion,
+  classifyNpmFailure,
+  PACKAGES,
+  parseVerifierArgs,
+  PUBLIC_REGISTRY,
+  readPublishPlan,
+  retryPropagation,
+  sha256Integrity,
+  sha512Integrity,
+} from './lib/release-checks.mjs';
 
+// Default: pack the local workspace. With --published, download the exact
+// versions from public npm instead. See .github/RELEASING.md.
+const options = parseVerifierArgs(process.argv.slice(2));
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const temporary = await mkdtemp(join(tmpdir(), 'overlay-packages-'));
 const failures = [];
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+const registryArgs = options.published
+  ? [`--registry=${PUBLIC_REGISTRY}`, '--prefer-online']
+  : [];
 
 function command(executable, args, cwd, env = {}) {
   try {
@@ -33,9 +53,11 @@ function command(executable, args, cwd, env = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    throw new Error(
+    const failure = new Error(
       `${executable} ${args.join(' ')} failed\n${String(error.stdout ?? '') + String(error.stderr ?? '')}`
     );
+    failure.kind = classifyNpmFailure(failure.message);
+    throw failure;
   }
 }
 
@@ -93,21 +115,218 @@ function installedVersions(tree, found = new Map()) {
   return found;
 }
 
+const readManifest = async (name) =>
+  JSON.parse(
+    await readFile(join(repository, `packages/${name}/package.json`), 'utf8')
+  );
+const coreManifest = await readManifest('core');
+const devtoolsManifest = await readManifest('devtools');
+// Released manifests define the expected versions unless given explicitly
+const versions = {
+  core: options.versions.core ?? coreManifest.version,
+  devtools: options.versions.devtools ?? devtoolsManifest.version,
+};
+// owner/repo URL that release provenance must name
+const sourceRepository = coreManifest.repository.url
+  .replace(/^git\+/, '')
+  .replace(/\.git$/, '');
+const plan = options.packDir
+  ? readPublishPlan(
+      JSON.parse(
+        await readFile(join(options.packDir, 'publish-plan.json'), 'utf8')
+      )
+    )
+  : new Map();
+const retry = { attempts: options.attempts, delayMs: options.delayMs, sleep };
+
+// Commit that provenance of newly published versions must name. The release
+// workflow passes it explicitly. A local run uses the checked-out commit.
+let sourceCommit;
+if (options.packDir) {
+  sourceCommit =
+    options.sourceCommit ??
+    command('git', ['rev-parse', 'HEAD'], repository).trim();
+  assert.match(sourceCommit, /^[0-9a-f]{40}$/, 'Cannot read the source commit');
+  console.log(`Provenance must name source commit ${sourceCommit}`);
+}
+
+// One deadline covers the request and reading its body
+const ATTESTATION_TIMEOUT_MS = 30_000;
+
+async function fetchAttestations(url) {
+  let body;
+  try {
+    const response = await globalThis.fetch(url, {
+      signal: globalThis.AbortSignal.timeout(ATTESTATION_TIMEOUT_MS),
+    });
+    if (response.status === 404) {
+      throw Object.assign(new Error(`${url}: not found yet`), {
+        kind: 'missing',
+      });
+    }
+    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    body = await response.json();
+  } catch (error) {
+    if (error.kind) throw error;
+    const reason =
+      error.name === 'TimeoutError'
+        ? `no response within ${ATTESTATION_TIMEOUT_MS} ms`
+        : error.message;
+    // Only a 404 is retried. Timeouts, network and parse errors fail.
+    throw Object.assign(new Error(`${url}: ${reason}`), {
+      kind: error instanceof SyntaxError ? 'unknown' : 'network',
+    });
+  }
+  if (!Array.isArray(body?.attestations)) {
+    throw new Error(`${url}: response has no attestations list`);
+  }
+  return body.attestations.map((attestation, index) => {
+    try {
+      return JSON.parse(
+        Buffer.from(
+          attestation.bundle.dsseEnvelope.payload,
+          'base64'
+        ).toString()
+      );
+    } catch (error) {
+      throw new Error(
+        `${url}: attestation ${index} cannot be decoded: ${error.message}`
+      );
+    }
+  });
+}
+
+// Downloads one exact version from public npm and checks it against the
+// registry metadata, the release artifact and its provenance
+async function downloadPublished(name, destination) {
+  const packageName = PACKAGES[name];
+  const version = versions[name];
+  const id = `${packageName}@${version}`;
+  const peers = {
+    react: Object.values(consumers).map((consumer) => consumer.react),
+    'react-dom': Object.values(consumers).map(
+      (consumer) => consumer['react-dom']
+    ),
+  };
+  if (name === 'devtools') peers[PACKAGES.core] = versions.core;
+  // An explicit --dist-tag wins, then the tag this release published with
+  const distTag = options.distTag ?? plan.get(packageName)?.tag ?? 'latest';
+  console.log(`${id} expected dist-tag ${distTag}`);
+  const meta = await retryPropagation(async () => {
+    const value = JSON.parse(
+      command(npm, ['view', id, '--json', ...registryArgs], temporary)
+    );
+    return {
+      value,
+      ...checkRegistryVersion(value, {
+        name: packageName,
+        version,
+        distTag: distTag === 'none' ? undefined : distTag,
+        peers,
+        // Keeps reading metadata until a new version has its attestation URL
+        requireProvenance: plan.has(packageName),
+      }),
+    };
+  }, retry);
+  for (const [peer, range] of Object.entries(meta.peerDependencies ?? {})) {
+    console.log(`${id} peer ${peer} ${range}`);
+  }
+  console.log(`${id} dist-tags ${JSON.stringify(meta['dist-tags'])}`);
+
+  const packed = await retryPropagation(async () => {
+    const value = JSON.parse(
+      command(
+        npm,
+        ['pack', id, '--pack-destination', destination, '--json'].concat(
+          registryArgs
+        ),
+        temporary
+      )
+    );
+    return { value, pending: [], problems: [] };
+  }, retry);
+  const tarball = join(destination, packed[0].filename);
+  const contents = await readFile(tarball);
+  assert.equal(
+    sha512Integrity(contents),
+    meta.dist.integrity,
+    `${id} download does not match the registry integrity`
+  );
+
+  const released = plan.get(packageName);
+  if (options.packDir && !released) {
+    console.log(`${id} was not published by this release`);
+  }
+  if (released) {
+    assert.equal(released.version, version, `${id} differs from the plan`);
+    const artifact = await readFile(join(options.packDir, released.tarball));
+    assert.equal(
+      sha256Integrity(artifact),
+      released.integrity,
+      `${id} release artifact does not match its publish plan`
+    );
+    assert.equal(
+      sha256Integrity(contents),
+      released.integrity,
+      `${id} on npm is not the tarball the release packed`
+    );
+    const statements = await retryPropagation(
+      async () => ({
+        value: await fetchAttestations(meta.dist.attestations.url),
+        pending: [],
+        problems: [],
+      }),
+      retry
+    );
+    const problems = checkProvenance(statements, {
+      name: packageName,
+      version,
+      sha512Hex: Buffer.from(
+        meta.dist.integrity.slice('sha512-'.length),
+        'base64'
+      ).toString('hex'),
+      repository: sourceRepository,
+      workflowPath: '.github/workflows/release.yml',
+      // Every production release runs from main
+      workflowRef: 'refs/heads/main',
+      sourceCommit,
+    });
+    assert.deepEqual(problems, [], problems.join('\n'));
+  }
+  return tarball;
+}
+
+let acquired = true;
 try {
-  console.log(`Packed consumer verification on Node ${process.version}`);
+  console.log(
+    options.published
+      ? `Published package verification of core ${versions.core} and devtools ${versions.devtools} on Node ${process.version}`
+      : `Packed consumer verification on Node ${process.version}`
+  );
   const tarballs = {};
   for (const name of ['core', 'devtools']) {
     const destination = join(temporary, name);
     await mkdir(destination);
-    command(
-      pnpm,
-      ['pack', '--pack-destination', destination],
-      join(repository, 'packages', name)
-    );
-    const files = await readdir(destination);
-    const tarball = files.find((file) => file.endsWith('.tgz'));
-    assert.ok(tarball, `No ${name} tarball created`);
-    tarballs[name] = join(destination, tarball);
+    if (options.published) {
+      acquired =
+        (await check(
+          `${name} ${versions[name]} registry metadata and integrity${plan.has(PACKAGES[name]) ? ', release artifact and provenance' : ''}`,
+          async () => {
+            tarballs[name] = await downloadPublished(name, destination);
+          }
+        )) && acquired;
+      if (!tarballs[name]) continue;
+    } else {
+      command(
+        pnpm,
+        ['pack', '--pack-destination', destination],
+        join(repository, 'packages', name)
+      );
+      const files = await readdir(destination);
+      const tarball = files.find((file) => file.endsWith('.tgz'));
+      assert.ok(tarball, `No ${name} tarball created`);
+      tarballs[name] = join(destination, tarball);
+    }
     await check(`${name} tarball excludes tests and source`, () => {
       const entries = command('tar', ['-tzf', tarballs[name]], temporary).split(
         '\n'
@@ -121,16 +340,11 @@ try {
     });
   }
 
-  const coreManifest = JSON.parse(
-    await readFile(join(repository, 'packages/core/package.json'), 'utf8')
-  );
   const workspaceRequire = createRequire(join(repository, 'package.json'));
   const compilerVersion = workspaceRequire('typescript/package.json').version;
-  const devtoolsManifest = JSON.parse(
-    await readFile(join(repository, 'packages/devtools/package.json'), 'utf8')
-  );
 
-  for (const major of [18, 19]) {
+  // Without both tarballs there is nothing to install
+  for (const major of acquired ? [18, 19] : []) {
     const consumer = join(temporary, `react-${major}`);
     await cp(join(repository, 'scripts/fixtures/package-consumer'), consumer, {
       recursive: true,
@@ -149,8 +363,13 @@ try {
           private: true,
           type: 'module',
           dependencies: {
-            '@react-overlay-manager/core': `file:${tarballs.core}`,
-            '@react-overlay-manager/devtools': `file:${tarballs.devtools}`,
+            // Published mode installs the exact versions from npm itself
+            '@react-overlay-manager/core': options.published
+              ? versions.core
+              : `file:${tarballs.core}`,
+            '@react-overlay-manager/devtools': options.published
+              ? versions.devtools
+              : `file:${tarballs.devtools}`,
             react: reactVersion,
             'react-dom': domVersion,
           },
@@ -167,8 +386,8 @@ try {
       )
     );
     const expected = {
-      '@react-overlay-manager/core': coreManifest.version,
-      '@react-overlay-manager/devtools': devtoolsManifest.version,
+      '@react-overlay-manager/core': versions.core,
+      '@react-overlay-manager/devtools': versions.devtools,
       react: reactVersion,
       'react-dom': domVersion,
       '@types/react': reactTypesVersion,
@@ -189,6 +408,7 @@ try {
             '--no-audit',
             '--no-fund',
             '--loglevel=error',
+            ...registryArgs,
           ],
           consumer
         );
@@ -196,13 +416,21 @@ try {
         const tree = JSON.parse(
           command(npm, ['ls', '--all', '--json'], consumer)
         );
-        for (const [name, versions] of installedVersions(tree)) {
+        for (const [name, found] of installedVersions(tree)) {
           // esbuild pins its platform binary packages to its own version
           const pinned = name.startsWith('@esbuild/')
             ? esbuildVersion
             : expected[name];
           assert.ok(pinned, `${name} is installed but not pinned`);
-          assert.deepEqual([...versions], [pinned], `${name} version`);
+          assert.deepEqual([...found], [pinned], `${name} version`);
+        }
+        // Verifies registry signatures and provenance attestations
+        if (options.published) {
+          command(
+            npm,
+            ['audit', 'signatures', `--registry=${PUBLIC_REGISTRY}`],
+            consumer
+          );
         }
       }
     );
@@ -216,7 +444,7 @@ try {
         () => {
           command(process.execPath, ['runtime.mjs'], consumer, {
             NODE_ENV: environment,
-            EXPECTED_CORE_VERSION: coreManifest.version,
+            EXPECTED_CORE_VERSION: versions.core,
           });
         }
       );
@@ -350,5 +578,17 @@ if (failures.length) {
   );
   process.exitCode = 1;
 } else {
-  console.log('All packed package consumer contracts passed.');
+  if (!options.published) {
+    console.log('All packed package consumer contracts passed.');
+  } else {
+    console.log(
+      `All published package contracts passed for core ${versions.core} and devtools ${versions.devtools}: registry metadata, integrity, signatures and consumer contracts.`
+    );
+    const released = [...plan.keys()];
+    console.log(
+      options.packDir
+        ? `Matched to the release artifact, with provenance from release.yml on main at ${sourceCommit}: ${released.join(', ') || 'none'}.`
+        : 'Not checked without --pack-dir: the release artifact and the provenance repository, workflow and source commit.'
+    );
+  }
 }
