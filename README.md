@@ -195,7 +195,7 @@ function handleClick() {
 | `update`            | `update(id, props)`      | Merges props into an open overlay. Throws `OverlayNotFoundError` if the ID is unknown.                                                                                                                                                         |
 | `closeAll`          | `closeAll()`             | Calls `close()` on every overlay, so each promise resolves with `undefined`. Exit animations still run.                                                                                                                                        |
 | `isOpen`            | `isOpen(id)`             | `true` while an overlay with this ID is in the manager, including while it is hidden or playing its exit animation.                                                                                                                            |
-| `getInstance`       | `getInstance(id)`        | Returns the runtime instance (`{ id, props, visible, ... }`) or `undefined`. Its `close` does not check the result type, see [Results and cancellation](#results-and-cancellation).                                                            |
+| `getInstance`       | `getInstance(id)`        | Returns the runtime instance (`{ id, props, visible, ... }`) or `undefined`. Its `close` accepts the result type of any registry entry; it is not narrowed by the ID. See [Results and cancellation](#results-and-cancellation).               |
 | `getInstancesByKey` | `getInstancesByKey(key)` | Returns every instance opened from one registry key.                                                                                                                                                                                           |
 | `getOpenCount`      | `getOpenCount()`         | Number of overlays in the stack, including hidden ones and ones still exiting.                                                                                                                                                                 |
 
@@ -417,7 +417,7 @@ await overlayManager.open(MotionDialog, {
 
 ### `PromiseWithId`
 
-`open()` returns a `PromiseWithId<TResult>`: a regular `Promise` with an `id` property. The ID is available before the promise settles.
+`open()` returns a `PromiseWithId<TResult | undefined>`: a regular `Promise` with an `id` property. It resolves with `undefined` when the overlay closes without a result. The ID is available before the promise settles.
 
 ```ts
 const promise = overlayManager.open('confirm', { message: 'Proceed?' });
