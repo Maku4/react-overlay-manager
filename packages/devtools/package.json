@@ -17,8 +17,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test": "vitest run --root ../.. packages/devtools/",
+    "test:coverage": "vitest run --root ../.. packages/devtools/ --coverage",
     "test:types": "tsd"
   },
   "peerDependencies": {
@@ -27,8 +27,8 @@
     "@react-overlay-manager/core": "workspace:*"
   },
   "devDependencies": {
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tsd": "^0.33.0"
   },
   "keywords": [

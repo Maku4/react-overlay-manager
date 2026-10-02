@@ -8,8 +8,7 @@ describe('OverlayManagerDevtools conditional export', () => {
     const mod = await import('../src/index');
     const Comp: (() => null) | ((...args: unknown[]) => unknown) =
       mod.OverlayManagerDevtools as unknown as
-        | (() => null)
-        | ((...args: unknown[]) => unknown);
+        (() => null) | ((...args: unknown[]) => unknown);
     expect(typeof Comp).toBe('function');
     // In prod it is a noop component returning null
     expect(Comp()).toBeNull();
@@ -23,8 +22,7 @@ describe('OverlayManagerDevtools conditional export', () => {
     const mod = await import('../src/index');
     const Comp: ((...args: unknown[]) => unknown) | (() => null) =
       mod.OverlayManagerDevtools as unknown as
-        | ((...args: unknown[]) => unknown)
-        | (() => null);
+        ((...args: unknown[]) => unknown) | (() => null);
     expect(typeof Comp).toBe('function');
     // Should not be the noop that returns null; it should be a component function
     process.env.NODE_ENV = prev;

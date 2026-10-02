@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import React from 'react';
 import { defineOverlay } from '../src/defineOverlay';
 import { OverlayManagerCore } from '../src/manager/OverlayManagerCore';
@@ -13,10 +13,8 @@ const Dummy: OverlayComponent<NoProps, VoidResult> = defineOverlay<
 >(() => React.createElement('div'));
 
 describe('OverlayManagerCore - portal target and SSR defaults', () => {
-  let originalDocument: any;
-
-  beforeEach(() => {
-    originalDocument = globalThis.document;
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('defaultPortalTarget is document.body when document exists', () => {
@@ -29,14 +27,10 @@ describe('OverlayManagerCore - portal target and SSR defaults', () => {
 
   it('defaultPortalTarget is null when document is not defined (SSR-like)', () => {
     // Temporarily remove document to simulate SSR
-    // @ts-expect-error override
-    globalThis.document = undefined;
+    vi.stubGlobal('document', undefined);
 
     const manager = new OverlayManagerCore({ dummy: Dummy });
     expect(manager.defaultPortalTarget).toBeNull();
-
-    // restore
-    globalThis.document = originalDocument;
   });
 
   it('per-open portalTarget null is stored as null', () => {

@@ -16,8 +16,7 @@ const manager = getManager<Reg>();
 
 // The export is a component-like callable. Model a minimal callable surface without importing React types.
 type DevtoolsComponent<T extends OverlayRegistry = OverlayRegistry> =
-  | ((args: { manager: OverlayManagerCore<T> }) => unknown)
-  | (() => null);
+  ((args: { manager: OverlayManagerCore<T> }) => unknown) | (() => null);
 
 expectAssignable<DevtoolsComponent>(OverlayManagerDevtools);
 
