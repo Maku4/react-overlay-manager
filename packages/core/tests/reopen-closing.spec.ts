@@ -1,11 +1,14 @@
 import { expect, it, vi } from 'vitest';
+import { createElement } from 'react';
 import { createOverlayManager, defineOverlay } from '../src';
 
 it('reopens a closing overlay independently of its old promise and callbacks', async () => {
   vi.useFakeTimers();
 
   try {
-    const Dialog = defineOverlay<{ label: string }, string>(() => null);
+    const Dialog = defineOverlay<{ label: string }, string>(() =>
+      createElement('div')
+    );
     const manager = createOverlayManager({ dialog: Dialog });
     const original = manager.open('dialog', {
       label: 'original',
