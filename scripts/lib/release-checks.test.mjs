@@ -253,6 +253,25 @@ describe('readPublishPlan', () => {
     assert.deepEqual([...releases.keys()], [core]);
   });
 
+  it('keeps the dist-tag of each release and rejects invalid ones', () => {
+    const entry = (tag) => ({
+      version: 1,
+      plan: [
+        [
+          {
+            kind: 'publish',
+            name: core,
+            version: '0.6.0-beta.0',
+            tag,
+            tarball: { path: 'packages/core.tgz', integrity: 'sha256-x' },
+          },
+        ],
+      ],
+    });
+    assert.equal(readPublishPlan(entry('next')).get(core).tag, 'next');
+    assert.throws(() => readPublishPlan(entry('1.2.3')), /invalid dist-tag/);
+  });
+
   it('rejects unknown formats and missing integrity', () => {
     assert.throws(() => readPublishPlan({ version: 2, plan: [] }));
     assert.throws(() =>
@@ -312,6 +331,21 @@ describe('checkProvenance', () => {
       /no SLSA provenance/
     );
     assert.match(checkProvenance([], expected)[0], /no SLSA provenance/);
+  });
+
+  it('rejects a release workflow run from another branch', () => {
+    const fromBranch = statement();
+    fromBranch.predicate.buildDefinition.externalParameters.workflow.ref =
+      'refs/heads/feature';
+    const release = { ...expected, workflowRef: 'refs/heads/main' };
+    assert.match(
+      checkProvenance([fromBranch], release)[0],
+      /ran on refs\/heads\/feature, expected refs\/heads\/main/
+    );
+    const fromMain = statement();
+    fromMain.predicate.buildDefinition.externalParameters.workflow.ref =
+      'refs/heads/main';
+    assert.deepEqual(checkProvenance([fromMain], release), []);
   });
 
   it('rejects a different tarball, repository or workflow', () => {

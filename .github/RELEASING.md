@@ -53,9 +53,10 @@ Merge only the commit you validated. If the workflow updates the PR afterwards, 
 
 `verify-published` checks the released commit's versions on public npm:
 
-- the exact versions exist, `latest` points to them and the DevTools peer accepts the released core
+- the exact versions exist, the dist-tag each version was published with points to it and the DevTools peer accepts the released core
 - every newly published tarball matches the SHA256 of the tarball the `pack` job built
-- newly published versions have SLSA provenance from this repository's `release.yml` that names the exact released commit, and `npm audit signatures` passes
+- newly published versions have SLSA provenance from this repository's `release.yml`, run on `main`, that names the exact released commit
+- `npm audit signatures` passes
 - React 18 and 19 consumers that install the exact versions from npm pass the same contracts as `pnpm verify:packages`
 
 Each registry step, such as reading a package's metadata, waits up to about 5 minutes for npm to show new data: 10 attempts, 30 seconds apart. A request for attestations times out after 30 seconds. Authentication, network and timeout errors fail the job immediately. A package the release did not publish is checked as well, without a provenance requirement.
@@ -67,15 +68,27 @@ pnpm install --frozen-lockfile
 pnpm verify:published
 ```
 
-Without options it takes the versions from the package manifests. `--core <version>` and `--devtools <version>` check other exact versions. `--dist-tag none` skips the `latest` check after a later release has moved it.
+Without options it takes the versions from the package manifests and expects `latest` to point to them. `--core <version>` and `--devtools <version>` check other exact versions. `--dist-tag <tag>` expects another tag, and `--dist-tag none` skips the check, for example after a later release has moved `latest`.
 
-Only `--pack-dir <dir>`, pointing at a downloaded `changeset-pack` artifact, adds the artifact and provenance checks. Provenance must then name the commit given by `--source-commit <sha>`, or the checked-out commit without that option. A run without `--pack-dir` does not verify where the packages were built.
+What a run proves depends on `--pack-dir`:
+
+- Without it: registry metadata and integrity, dist-tags, peer ranges, signatures and the consumer contracts. It does not compare with the release artifact or check the provenance repository, workflow, branch or source commit.
+- With `--pack-dir <dir>`, pointing at the downloaded `changeset-pack` artifact: also the artifact SHA256 and provenance for each version the release published. Provenance must name the commit given by `--source-commit <sha>`, or the checked-out commit without that option. Each version is expected under the dist-tag recorded in the artifact's publish plan.
 
 Check the release three times:
 
 1. When the workflow finishes: `verify-published` passed, and the tags and GitHub releases exist.
-2. About 24 hours later: run `pnpm verify:published --core 0.5.0 --devtools 0.2.4`, and read new issues.
-3. About 72 hours later: repeat the same checks.
+2. About 24 hours later: run the check from a checkout of the released commit or its release tag, with the original pack artifact, and read new issues:
+
+   ```bash
+   git checkout <released commit>
+   pnpm install --frozen-lockfile
+   pnpm verify:published --pack-dir <artifact dir> --source-commit <released commit>
+   ```
+
+   Use the released commit, not a later `main`. Later consumer contracts can describe newer behavior and fail a correct earlier release.
+
+3. About 72 hours later: repeat the same check.
 
 ## When something fails
 

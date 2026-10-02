@@ -41,7 +41,8 @@ export function parseVerifierArgs(argv) {
     versions: {},
     packDir: undefined,
     sourceCommit: undefined,
-    distTag: 'latest',
+    // Unset means: the publish plan's tag for released packages, else latest
+    distTag: undefined,
     attempts: 10,
     delayMs: 30_000,
   };
@@ -255,8 +256,12 @@ export function readPublishPlan(plan) {
     if (!release.tarball?.integrity?.startsWith('sha256-')) {
       throw new Error(`${release.name} has no sha256 tarball integrity`);
     }
+    if (release.tag !== undefined && !isDistTag(release.tag)) {
+      throw new Error(`${release.name} has an invalid dist-tag in the plan`);
+    }
     releases.set(release.name, {
       version: release.version,
+      tag: release.tag,
       tarball: release.tarball.path,
       integrity: release.tarball.integrity,
     });
@@ -293,6 +298,11 @@ export function checkProvenance(statements, expected) {
   if (workflow?.path !== expected.workflowPath) {
     problems.push(
       `${id}: provenance workflow is ${workflow?.path ?? 'missing'}`
+    );
+  }
+  if (expected.workflowRef && workflow?.ref !== expected.workflowRef) {
+    problems.push(
+      `${id}: provenance workflow ran on ${workflow?.ref ?? 'no ref'}, expected ${expected.workflowRef}`
     );
   }
   if (expected.sourceCommit) {

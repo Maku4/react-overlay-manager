@@ -209,6 +209,9 @@ async function downloadPublished(name, destination) {
     ),
   };
   if (name === 'devtools') peers[PACKAGES.core] = versions.core;
+  // An explicit --dist-tag wins, then the tag this release published with
+  const distTag = options.distTag ?? plan.get(packageName)?.tag ?? 'latest';
+  console.log(`${id} expected dist-tag ${distTag}`);
   const meta = await retryPropagation(async () => {
     const value = JSON.parse(
       command(npm, ['view', id, '--json', ...registryArgs], temporary)
@@ -218,7 +221,7 @@ async function downloadPublished(name, destination) {
       ...checkRegistryVersion(value, {
         name: packageName,
         version,
-        distTag: options.distTag === 'none' ? undefined : options.distTag,
+        distTag: distTag === 'none' ? undefined : distTag,
         peers,
         // Keeps reading metadata until a new version has its attestation URL
         requireProvenance: plan.has(packageName),
@@ -284,6 +287,8 @@ async function downloadPublished(name, destination) {
       ).toString('hex'),
       repository: sourceRepository,
       workflowPath: '.github/workflows/release.yml',
+      // Every production release runs from main
+      workflowRef: 'refs/heads/main',
       sourceCommit,
     });
     assert.deepEqual(problems, [], problems.join('\n'));
@@ -573,9 +578,17 @@ if (failures.length) {
   );
   process.exitCode = 1;
 } else {
-  console.log(
-    options.published
-      ? `All published package contracts passed for core ${versions.core} and devtools ${versions.devtools}.`
-      : 'All packed package consumer contracts passed.'
-  );
+  if (!options.published) {
+    console.log('All packed package consumer contracts passed.');
+  } else {
+    console.log(
+      `All published package contracts passed for core ${versions.core} and devtools ${versions.devtools}: registry metadata, integrity, signatures and consumer contracts.`
+    );
+    const released = [...plan.keys()];
+    console.log(
+      options.packDir
+        ? `Matched to the release artifact, with provenance from release.yml on main at ${sourceCommit}: ${released.join(', ') || 'none'}.`
+        : 'Not checked without --pack-dir: the release artifact and the provenance repository, workflow and source commit.'
+    );
+  }
 }
