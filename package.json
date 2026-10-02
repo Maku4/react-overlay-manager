@@ -15,14 +15,16 @@
     "demo": "pnpm build && node demo/server.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "test:types": "pnpm -r --filter=\"./packages/*\" test:types",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "type-check": "pnpm -r --filter=\"./packages/*\" type-check && tsc -p demo/tsconfig.json --noEmit",
     "ci:version": "changeset version",
-    "validate": "pnpm build && pnpm type-check && pnpm test:types && pnpm lint && pnpm format:check && pnpm test:coverage && pnpm verify:packages && pnpm audit",
+    "validate": "pnpm build && pnpm type-check && pnpm test:types && pnpm lint && pnpm format:check && pnpm test:coverage && pnpm test:scripts && pnpm verify:packages && pnpm audit",
     "release:publish": "node .github/scripts/publish-packed.mjs && changeset git-tag",
-    "verify:packages": "node scripts/verify-packages.mjs"
+    "verify:packages": "node scripts/verify-packages.mjs",
+    "verify:published": "node scripts/verify-packages.mjs --published"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
