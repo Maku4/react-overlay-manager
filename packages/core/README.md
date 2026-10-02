@@ -528,7 +528,21 @@ export const ValidationModal = defineOverlay<ValidationModalProps, void>(
 
 ## IDs, reopening and errors
 
-Generated IDs look like `overlay_0`. Pass `id` to `open()` to address an overlay by a name you choose. What `open()` does with an existing ID depends on the overlay's state:
+Generated IDs look like `overlay_0`, and `promise.id` is already typed as `OverlayId`. To address an overlay by a name you choose, pass `id` to `open()`. `OverlayId` is a branded string type, so a custom name needs an `as OverlayId` assertion:
+
+```ts
+import type { OverlayId } from '@react-overlay-manager/core';
+import { overlayManager } from '../services/overlayManager';
+
+const CONFIRM_DELETE_ID = 'confirm-delete' as OverlayId;
+
+const confirmed = await overlayManager.open('confirm', {
+  id: CONFIRM_DELETE_ID,
+  message: 'Delete this item?',
+});
+```
+
+What `open()` does with an existing ID depends on the overlay's state:
 
 | State of the overlay with that ID                      | Result of `open()` with the same `id`                                                                  |
 | :----------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
