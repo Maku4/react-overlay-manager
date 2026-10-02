@@ -13,6 +13,14 @@ Releases run from `.github/workflows/release.yml` on every push to `main`. Versi
 
 `pnpm validate` is the same gate CI runs on pull requests: build, type checks, type tests, lint, formatting, tests with coverage and `pnpm audit`.
 
+## Recovering a partial release
+
+If the `publish` job published to npm but failed later, while tagging or creating GitHub releases, open the original workflow run and use "Re-run failed jobs". The re-run uses the same commit and the tarballs from the original `pack` job. It skips versions that are already on npm, then tags and releases the rest. This works while the pack artifact exists, which is 30 days.
+
+Do not start a new run for this. A new run sees the versions on npm, selects no work and creates no tags.
+
+The re-run skips tags that already exist. If a tag was pushed but its GitHub release is missing, or the artifact has expired, create the missing tag and release by hand from the released commit and the package `CHANGELOG.md`. Tags use the form `@react-overlay-manager/core@0.4.2`.
+
 ## Prerequisites on npm
 
 Publishing uses npm trusted publishing (OIDC), so the workflow needs no npm token. Before the first release from this workflow, each package needs a trusted publisher on npmjs.com:
