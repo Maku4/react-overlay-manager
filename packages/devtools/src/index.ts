@@ -1,3 +1,5 @@
+'use client';
+
 import { Devtools } from './Devtools';
 
 export const OverlayManagerDevtools =

@@ -7,6 +7,7 @@ import type {
   AnyOverlayInstance,
 } from '@react-overlay-manager/core';
 import { OverlayManagerCore } from '@react-overlay-manager/core';
+import { formatProps } from './inspectProps';
 
 interface OverlayDetailsProps<TRegistry extends OverlayRegistry> {
   manager: OverlayManagerCore<TRegistry>;
@@ -26,6 +27,14 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
   const componentName = useMemo(() => {
     return instance ? getInstanceOverlayName(instance) : null;
   }, [instance]);
+
+  const propsText = useMemo(
+    () =>
+      instance
+        ? formatProps(instance.props, { manager, pretty: prettyProps })
+        : '',
+    [instance, manager, prettyProps]
+  );
 
   const copy = async (text: string) => {
     try {
@@ -125,6 +134,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               }}
             >
               {String(instance.visible)}
+              {instance.isClosing ? ' (closing)' : ''}
             </span>
           </div>
         </div>
@@ -158,13 +168,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
                 Pretty
               </label>
               <button
-                onClick={() =>
-                  copy(
-                    prettyProps
-                      ? JSON.stringify(instance.props, null, 2)
-                      : JSON.stringify(instance.props)
-                  )
-                }
+                onClick={() => copy(propsText)}
                 title="Copy props JSON"
                 style={{
                   padding: '4px 8px',
@@ -191,9 +195,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               margin: 0,
             }}
           >
-            {prettyProps
-              ? JSON.stringify(instance.props, null, 2)
-              : JSON.stringify(instance.props)}
+            {propsText}
           </pre>
         </div>
 
@@ -211,13 +213,15 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={() => instance.close()}
+              disabled={instance.isClosing}
               style={{
                 padding: '6px 12px',
                 backgroundColor: '#ff9800',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: 'pointer',
+                cursor: instance.isClosing ? 'not-allowed' : 'pointer',
+                opacity: instance.isClosing ? 0.5 : 1,
                 fontSize: '11px',
                 fontWeight: 700,
               }}
@@ -228,13 +232,22 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               onClick={() =>
                 instance.visible ? instance.hide() : manager.show(instance.id)
               }
+              // A closing overlay has already resolved its promise and is
+              // waiting for removal, so it cannot be shown again.
+              disabled={instance.isClosing}
+              title={
+                instance.isClosing
+                  ? 'Closing overlays cannot be shown'
+                  : undefined
+              }
               style={{
                 padding: '6px 12px',
                 backgroundColor: instance.visible ? '#6c757d' : '#2da44e',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: 'pointer',
+                cursor: instance.isClosing ? 'not-allowed' : 'pointer',
+                opacity: instance.isClosing ? 0.5 : 1,
                 fontSize: '11px',
                 fontWeight: 700,
               }}

@@ -1,29 +1,54 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { DevtoolsPanel } from './DevtoolsPanel';
 import type { OverlayRegistry } from '@react-overlay-manager/core';
 import type { OverlayManagerCore } from '@react-overlay-manager/core';
 import { useDevtoolsStore } from './useDevtoolsStore';
+
+/** Pointer movement in pixels before a press on the floating button counts as a drag. */
+const DRAG_THRESHOLD = 3;
+
+const OPEN_KEY = 'rom-devtools-open';
+
+function readStoredOpen(): boolean {
+  try {
+    return sessionStorage.getItem(OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+// Session storage has no change events within a tab, so there is nothing to subscribe to.
+const subscribeNever = () => () => {};
+const closedOnServer = () => false;
 
 export function Devtools<TRegistry extends OverlayRegistry>({
   manager,
 }: {
   manager: OverlayManagerCore<TRegistry>;
 }) {
-  const [isOpen, setIsOpen] = useState(() => {
-    try {
-      return sessionStorage.getItem('rom-devtools-open') === '1';
-    } catch {
-      return false;
-    }
-  });
+  // The server snapshot is always closed. During hydration React renders that
+  // first, then re-renders with the stored value, so the markup matches. The
+  // panel reads its own stored position and size and therefore only mounts on
+  // the client.
+  const storedOpen = useSyncExternalStore(
+    subscribeNever,
+    readStoredOpen,
+    closedOnServer
+  );
+  // null until the user toggles the panel in this mount
+  const [override, setOverride] = useState<boolean | null>(null);
+  const isOpen = override ?? storedOpen;
+  const setIsOpen = (open: boolean) => setOverride(open);
 
   const overlayCount = useDevtoolsStore(manager, (s) => s.overlayStack.length);
 
   useEffect(() => {
+    // Only a user toggle is written, so a stored "open" is never replaced on mount.
+    if (override === null) return;
     try {
-      sessionStorage.setItem('rom-devtools-open', isOpen ? '1' : '0');
+      sessionStorage.setItem(OPEN_KEY, override ? '1' : '0');
     } catch {}
-  }, [isOpen]);
+  }, [override]);
 
   useEffect(() => {
     const KEY_TOGGLE = 'O' as const;
@@ -50,7 +75,7 @@ export function Devtools<TRegistry extends OverlayRegistry>({
         event.shiftKey &&
         event.key.toUpperCase() === KEY_TOGGLE
       ) {
-        setIsOpen((prev) => !prev);
+        setOverride((prev) => !(prev ?? readStoredOpen()));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -59,6 +84,7 @@ export function Devtools<TRegistry extends OverlayRegistry>({
 
   // Optional: simple draggable floating button
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  // The button remounts whenever the panel closes, so reattach on each toggle.
   useEffect(() => {
     const btn = btnRef.current;
     if (!btn) return;
@@ -68,9 +94,13 @@ export function Devtools<TRegistry extends OverlayRegistry>({
     let startY = 0;
     let origRight = 20;
     let origBottom = 20;
+    // Set once a press moves far enough to count as a drag. The click the
+    // browser fires on release is then consumed instead of opening the panel.
+    let dragged = false;
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true;
+      dragged = false;
       startX = e.clientX;
       startY = e.clientY;
       const cs = window.getComputedStyle(btn);
@@ -84,23 +114,42 @@ export function Devtools<TRegistry extends OverlayRegistry>({
       if (!isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+      if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+        dragged = true;
+      }
       btn.style.right = `${Math.max(8, origRight - dx)}px`;
       btn.style.bottom = `${Math.max(8, origBottom - dy)}px`;
     };
 
-    const onMouseUp = () => {
+    const onMouseUp = (e: MouseEvent) => {
       isDragging = false;
+      // The browser only clicks the button when the release lands on it.
+      // Otherwise no click follows, and keeping the flag would swallow the
+      // next keyboard activation.
+      if (!(e.target instanceof Node && btn.contains(e.target))) {
+        dragged = false;
+      }
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
 
+    const onClick = (e: MouseEvent) => {
+      if (!dragged) return;
+      dragged = false;
+      // Stops the event before it reaches React's onClick.
+      e.stopPropagation();
+      e.preventDefault();
+    };
+
     btn.addEventListener('mousedown', onMouseDown);
+    btn.addEventListener('click', onClick);
     return () => {
       btn.removeEventListener('mousedown', onMouseDown);
+      btn.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [isOpen]);
 
   return (
     <>
