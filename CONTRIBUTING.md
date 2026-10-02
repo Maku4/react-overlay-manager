@@ -29,6 +29,8 @@ Run these from the repository root before opening a pull request:
 | `pnpm lint`         | ESLint                                      |
 | `pnpm format:check` | Prettier                                    |
 
+`pnpm validate` runs the build, both type checks, lint and formatting, then the tests with coverage and `pnpm audit`. CI runs it on pull requests.
+
 To run one test file, pass its path to Vitest:
 
 ```bash
@@ -74,7 +76,7 @@ Every change that affects a published package needs a changeset:
 pnpm changeset
 ```
 
-Pick the affected packages and the bump type, then describe the change from a user's point of view. Commit the generated file in `.changeset/` with your change. Maintainers version and publish packages from `main`.
+Pick the affected packages and the bump type, then describe the change from a user's point of view. Commit the generated file in `.changeset/` with your change. Maintainers version and publish packages from `main`. See [.github/RELEASING.md](.github/RELEASING.md).
 
 ## Reporting security issues
 
