@@ -27,6 +27,17 @@ type Subscription<TRegistry extends OverlayRegistry> = {
 };
 
 /**
+ * Per-open bookkeeping. A new record is created every time an overlay is
+ * opened, so its identity marks one generation of an ID. Instance objects in
+ * state are cloned on show/hide/update and cannot serve that purpose.
+ */
+type Lifecycle = {
+  promise: PromiseWithId<any>;
+  closed: boolean;
+  exitTimeout?: ReturnType<typeof setTimeout>;
+};
+
+/**
  * The internal, type-safe overlay manager implementation.
  * @internal
  */
@@ -40,12 +51,8 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
   private subscriptions = new Set<Subscription<TRegistry>>();
   private nextId = 0 as number;
 
-  private promises = new Map<OverlayId, PromiseWithId<any>>();
-
-  // Track per-instance pending exit timeout to allow clearing when onExitComplete is called earlier
-  private exitTimeouts = new Map<OverlayId, ReturnType<typeof setTimeout>>();
-  // Track if close() was already invoked to avoid duplicate flows
-  private closedOnce = new Set<OverlayId>();
+  // Lifecycle of the current generation of each open ID
+  private lifecycles = new Map<OverlayId, Lifecycle>();
 
   public defaultExitDuration: number | null | undefined;
 
@@ -113,13 +120,19 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     if (id && this.state.instances.has(id)) {
       const instance = this.state.instances.get(id)!;
 
+      const lifecycle = this.lifecycles.get(id)!;
+
       if (instance.visible) {
         throw new OverlayAlreadyOpenError(id);
+      } else if (lifecycle.closed) {
+        // The old promise has already resolved, so drop the exiting instance
+        // and fall through to open a fresh one under the same ID.
+        this.remove(id);
       } else {
         const newProps = this.stripInternalOptions(options);
         this.update(id, newProps);
         this.show(id);
-        return this.promises.get(id) as PromiseWithId<any>;
+        return lifecycle.promise;
       }
     }
 
@@ -309,7 +322,11 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     });
 
     const promiseWithId = Object.assign(promise, { id: runtimeId });
-    this.promises.set(runtimeId, promiseWithId);
+    const lifecycle: Lifecycle = { promise: promiseWithId, closed: false };
+    this.lifecycles.set(runtimeId, lifecycle);
+
+    // Callbacks captured by this generation must not act on a later one
+    const isCurrent = () => this.lifecycles.get(runtimeId) === lifecycle;
 
     const cleanProps = this.stripInternalOptions(options) as P;
 
@@ -323,14 +340,14 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
       stackingBehavior: behavior,
       manager: this,
       hide: () => {
+        if (!isCurrent()) return;
         this.hide(runtimeId);
       },
       close: (result?: R) => {
         // Prevent duplicate close processing
-        if (this.closedOnce.has(runtimeId)) return;
-        if (!this.state.instances.has(runtimeId)) return;
+        if (!isCurrent() || lifecycle.closed) return;
 
-        this.closedOnce.add(runtimeId);
+        lifecycle.closed = true;
 
         resolveFn(result as R);
 
@@ -401,40 +418,24 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
           finalDuration = globalDuration;
         }
 
-        // Clear any previous pending timeout just in case
-        const prev = this.exitTimeouts.get(runtimeId);
-        if (prev) {
-          clearTimeout(prev);
-          this.exitTimeouts.delete(runtimeId);
-        }
-
         if (typeof finalDuration === 'number') {
           if (finalDuration <= 0) {
             // Immediate removal
-            if (this.state.instances.has(runtimeId)) {
-              this.remove(runtimeId);
-            }
+            this.remove(runtimeId);
           } else {
-            const handle = setTimeout(() => {
-              this.exitTimeouts.delete(runtimeId);
-              if (this.state.instances.has(runtimeId)) {
+            lifecycle.exitTimeout = setTimeout(() => {
+              lifecycle.exitTimeout = undefined;
+              if (isCurrent()) {
                 this.remove(runtimeId);
               }
             }, finalDuration);
-            this.exitTimeouts.set(runtimeId, handle);
           }
         }
       },
       onExitComplete: () => {
-        // If an auto-timeout is pending, clear it and remove immediately
-        const pending = this.exitTimeouts.get(runtimeId);
-        if (pending) {
-          clearTimeout(pending);
-          this.exitTimeouts.delete(runtimeId);
-        }
-        if (this.state.instances.has(runtimeId)) {
-          this.remove(runtimeId);
-        }
+        // remove() also clears a pending exit timeout
+        if (!isCurrent()) return;
+        this.remove(runtimeId);
       },
     };
 
@@ -467,15 +468,14 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
       return;
     }
 
-    // Clear any pending exit timeout and closed flag
-    const t = this.exitTimeouts.get(id);
-    if (t) {
-      clearTimeout(t);
-      this.exitTimeouts.delete(id);
+    // Clear any pending exit timeout and end this generation
+    const lifecycle = this.lifecycles.get(id);
+    if (lifecycle?.exitTimeout) {
+      clearTimeout(lifecycle.exitTimeout);
+      lifecycle.exitTimeout = undefined;
     }
-    this.closedOnce.delete(id);
+    this.lifecycles.delete(id);
 
-    this.promises.delete(id);
     const nextInstances = new Map(this.state.instances);
     nextInstances.delete(id);
     const nextStack = this.state.overlayStack.filter((i) => i !== id);
