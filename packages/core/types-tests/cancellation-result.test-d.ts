@@ -1,5 +1,5 @@
 import { createElement } from 'react';
-import { expectError, expectType } from 'tsd';
+import { expectType } from 'tsd';
 import {
   createOverlayManager,
   defineOverlay,
@@ -19,7 +19,8 @@ expectType<PromiseWithId<boolean | undefined>>(pending);
 async function useResult() {
   const answer = await pending;
   expectType<boolean | undefined>(answer);
-  expectError(answer.valueOf());
+  // @ts-expect-error Cancellation requires checking for undefined first.
+  answer.valueOf();
   if (answer !== undefined) answer.valueOf();
 }
 void useResult;
