@@ -3,8 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+  # Any base branch, so pull requests stacked on other branches also run CI
   pull_request:
-    branches: [main]
 
 jobs:
   test:
