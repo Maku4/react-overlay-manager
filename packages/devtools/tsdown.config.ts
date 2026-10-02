@@ -11,6 +11,8 @@ export default defineConfig({
   dts: { sourcemap: false },
   sourcemap: false,
   clean: true,
+  // Unbundled output keeps each module's directive, so this warning does not apply
+  checks: { moduleLevelDirective: false },
   deps: {
     neverBundle: [
       /^react($|\/)/,
