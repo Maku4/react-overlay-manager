@@ -134,6 +134,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               }}
             >
               {String(instance.visible)}
+              {instance.isClosing ? ' (closing)' : ''}
             </span>
           </div>
         </div>
@@ -212,13 +213,15 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={() => instance.close()}
+              disabled={instance.isClosing}
               style={{
                 padding: '6px 12px',
                 backgroundColor: '#ff9800',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: 'pointer',
+                cursor: instance.isClosing ? 'not-allowed' : 'pointer',
+                opacity: instance.isClosing ? 0.5 : 1,
                 fontSize: '11px',
                 fontWeight: 700,
               }}
@@ -229,13 +232,22 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               onClick={() =>
                 instance.visible ? instance.hide() : manager.show(instance.id)
               }
+              // A closing overlay has already resolved its promise and is
+              // waiting for removal, so it cannot be shown again.
+              disabled={instance.isClosing}
+              title={
+                instance.isClosing
+                  ? 'Closing overlays cannot be shown'
+                  : undefined
+              }
               style={{
                 padding: '6px 12px',
                 backgroundColor: instance.visible ? '#6c757d' : '#2da44e',
                 color: 'white',
                 border: 'none',
                 borderRadius: '6px',
-                cursor: 'pointer',
+                cursor: instance.isClosing ? 'not-allowed' : 'pointer',
+                opacity: instance.isClosing ? 0.5 : 1,
                 fontSize: '11px',
                 fontWeight: 700,
               }}

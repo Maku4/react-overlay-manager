@@ -4,6 +4,9 @@ import type { OverlayRegistry } from '@react-overlay-manager/core';
 import type { OverlayManagerCore } from '@react-overlay-manager/core';
 import { useDevtoolsStore } from './useDevtoolsStore';
 
+/** Pointer movement in pixels before a press on the floating button counts as a drag. */
+const DRAG_THRESHOLD = 3;
+
 export function Devtools<TRegistry extends OverlayRegistry>({
   manager,
 }: {
@@ -76,9 +79,13 @@ export function Devtools<TRegistry extends OverlayRegistry>({
     let startY = 0;
     let origRight = 20;
     let origBottom = 20;
+    // Set once a press moves far enough to count as a drag. The click the
+    // browser fires on release is then consumed instead of opening the panel.
+    let dragged = false;
 
     const onMouseDown = (e: MouseEvent) => {
       isDragging = true;
+      dragged = false;
       startX = e.clientX;
       startY = e.clientY;
       const cs = window.getComputedStyle(btn);
@@ -92,6 +99,9 @@ export function Devtools<TRegistry extends OverlayRegistry>({
       if (!isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
+      if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+        dragged = true;
+      }
       btn.style.right = `${Math.max(8, origRight - dx)}px`;
       btn.style.bottom = `${Math.max(8, origBottom - dy)}px`;
     };
@@ -102,9 +112,19 @@ export function Devtools<TRegistry extends OverlayRegistry>({
       document.removeEventListener('mouseup', onMouseUp);
     };
 
+    const onClick = (e: MouseEvent) => {
+      if (!dragged) return;
+      dragged = false;
+      // Stops the event before it reaches React's onClick.
+      e.stopPropagation();
+      e.preventDefault();
+    };
+
     btn.addEventListener('mousedown', onMouseDown);
+    btn.addEventListener('click', onClick);
     return () => {
       btn.removeEventListener('mousedown', onMouseDown);
+      btn.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
