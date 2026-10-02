@@ -59,6 +59,7 @@ export function Devtools<TRegistry extends OverlayRegistry>({
 
   // Optional: simple draggable floating button
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  // The button remounts whenever the panel closes, so reattach on each toggle.
   useEffect(() => {
     const btn = btnRef.current;
     if (!btn) return;
@@ -100,7 +101,7 @@ export function Devtools<TRegistry extends OverlayRegistry>({
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [isOpen]);
 
   return (
     <>
