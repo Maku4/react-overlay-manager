@@ -1,39 +1,39 @@
 # React Overlay Manager
 
-A lightweight, **type-safe** overlay system for React with a zero dependency and built-in DevTools.
+A type-safe overlay system for React 18 and 19 with optional DevTools.
 
-- 📦 **Headless** – bring your own styles / animations
-- 🔒 **Fully typed** – compile-time safety for props and results
-- 🛠 **DevTools** – inspect the overlay stack in development
-- ⚡️ **Fast** – minimal state, `useSyncExternalStore` under the hood
-- 📏 **Small** – ~2.6 kB gzipped
+- Headless. You bring the markup, styles and animations.
+- Typed. `open()` checks props and infers the result type for each overlay.
+- Small API. A manager object, one `<OverlayManager>` component and a `useOverlayStore` hook built on `useSyncExternalStore`.
+- No runtime dependencies besides React and React DOM.
 
 ---
 
-## Table of Contents
+## Contents
 
 - [Installation](#installation)
-- [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-- [React Hook: `useOverlayStore`](#react-hook-useoverlaystore)
-- [Exit Behavior & Animations](#exit-behavior--animations)
-- [Stacking Behavior](#stacking-behavior)
+- [Quick start](#quick-start)
+- [API reference](#api-reference)
+- [React hook: `useOverlayStore`](#react-hook-useoverlaystore)
+- [Exit behavior and animations](#exit-behavior-and-animations)
+- [Stacking behavior](#stacking-behavior)
 - [DevTools](#devtools)
 - [Examples](#examples)
-  - [CSS Transitions](#css-transitions)
+  - [CSS transitions](#css-transitions)
   - [Framer Motion](#framer-motion)
-- [TypeScript Guide](#typescript-guide)
-  - [Async/Await and `PromiseWithId`](#asyncawait-and-promisewithid)
-  - [Compile-time Errors for Wrong Props](#compile-time-errors-for-wrong-props)
-- [Advanced Patterns](#advanced-patterns)
-  - [Central Registry with `React.lazy`](#central-registry-with-reactlazy)
+- [TypeScript guide](#typescript-guide)
+  - [`PromiseWithId`](#promisewithid)
+  - [Compile-time errors for wrong props](#compile-time-errors-for-wrong-props)
+- [Advanced patterns](#advanced-patterns)
+  - [Lazy registry entries](#lazy-registry-entries)
   - [Using `open()` without `await`](#using-open-without-await)
-- [Edge Cases & Error Handling](#edge-cases--error-handling)
-- [SSR / Next.js](#ssr--nextjs)
+  - [Nested overlays with the injected manager](#nested-overlays-with-the-injected-manager)
+- [IDs, reopening and errors](#ids-reopening-and-errors)
+- [SSR and Next.js](#ssr-and-nextjs)
 - [Accessibility](#accessibility)
 - [Troubleshooting](#troubleshooting)
-- [Bundling & Versioning](#bundling--versioning)
-- [Quality & Coverage](#quality--coverage)
+- [Bundling and versioning](#bundling-and-versioning)
+- [Contributing and security](#contributing-and-security)
 - [License](#license)
 
 ---
@@ -41,51 +41,49 @@ A lightweight, **type-safe** overlay system for React with a zero dependency and
 ## Installation
 
 ```bash
-pnpm add @react-overlay-manager/core           # or yarn / npm
+pnpm add @react-overlay-manager/core   # or npm / yarn
 ```
 
 ---
 
-## Quick Start
+## Quick start
 
 ### 1. Define an overlay component
 
-Use the `defineOverlay` helper for full type-safety. It injects props like `visible` (for animations) and `close` (to return a result).
+Wrap the component in `defineOverlay`. The first type argument is your props and the second is the result `close()` resolves with. The manager injects `visible`, `close` and the other props listed in [Injected overlay props](#injected-overlay-props).
 
 ```tsx
 // src/components/ConfirmDialog.tsx
 import { defineOverlay } from '@react-overlay-manager/core';
-import cx from 'clsx';
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   message: string;
 }
 
 export const ConfirmDialog = defineOverlay<ConfirmDialogProps, boolean>(
-  ({ message, visible, close }) => {
-    const dialogClass = cx(
-      '... transition-opacity duration-300',
-      visible
-        ? 'opacity-100 pointer-events-auto'
-        : 'opacity-0 pointer-events-none'
-    );
-
-    return (
-      <div className={dialogClass}>
-        <div className="...">
-          <p>{message}</p>
-          <button onClick={() => close(true)}>Confirm</button>
-          <button onClick={() => close(false)}>Cancel</button>
-        </div>
-      </div>
-    );
-  }
+  ({ message, visible, close }) => (
+    <div
+      role="dialog"
+      aria-modal="true"
+      style={{
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? 'auto' : 'none',
+        transition: 'opacity 200ms',
+      }}
+    >
+      <p>{message}</p>
+      <button onClick={() => close(true)}>Confirm</button>
+      <button onClick={() => close(false)}>Cancel</button>
+    </div>
+  )
 );
 ```
 
+The function passed to `defineOverlay` must return a JSX element. To render nothing while hidden, return an empty element such as `<></>` instead of `null`.
+
 ### 2. Create a manager
 
-A manager holds the registry of your overlays.
+A manager holds the registry of your overlays and their state.
 
 ```tsx
 // src/services/overlayManager.ts
@@ -97,9 +95,11 @@ export const overlayManager = createOverlayManager({
 });
 ```
 
+A module-level manager is fine in a client-only app. In a server-rendered app, create one manager per provider instead. See [SSR and Next.js](#ssr-and-nextjs).
+
 ### 3. Render the manager at your app's root
 
-The `<OverlayManager>` component is responsible for rendering your overlays into the DOM. You must always include it in your app's root.
+`<OverlayManager>` renders the open overlays into a portal. Overlays do not appear without it.
 
 ```tsx
 // src/App.tsx
@@ -117,20 +117,19 @@ export default function App() {
 }
 ```
 
-> **Note:** For overlays without CSS animations, you may want to add `defaultExitDuration={0}` to ensure they are removed from the DOM after closing. See the [Exit Behavior](#exit-behavior--animations) section for details.
+> **Note:** An overlay whose root element has no CSS transition or animation is never removed after `close()` unless you set an exit duration. Add `defaultExitDuration={0}` to remove such overlays immediately. See [Exit behavior and animations](#exit-behavior-and-animations).
 
-### 4. Open an overlay from anywhere
+### 4. Open an overlay
 
-Call `manager.open()` from any component, hook, or service. It's fully async and type-safe.
+Call `open()` from a component, hook or service. It returns a promise that resolves with the value passed to `close()`.
 
 ```tsx
-// inside any component / service
 import { overlayManager } from '../services/overlayManager';
 
 async function deleteItem() {
   const confirmed = await overlayManager.open('confirm', {
     message: 'Delete this item?',
-  }); // `confirmed` is typed as `boolean`
+  }); // `confirmed` is a boolean
 
   if (confirmed) {
     // ...delete logic
@@ -138,9 +137,9 @@ async function deleteItem() {
 }
 ```
 
-### 5. Open a component directly (no registry needed)
+### 5. Open a component directly
 
-You can also open components on-the-fly without registering them first.
+Components can be opened without a registry entry.
 
 ```tsx
 import { overlayManager } from '../services/overlayManager';
@@ -149,11 +148,9 @@ import { TempDialog } from '../components/TempDialog';
 await overlayManager.open(TempDialog, { title: 'One-off dialog' });
 ```
 
-### Alternative: Simplified Setup (No Registry)
+### Shared default manager
 
-If you don't intend to use a component registry and only want to open components directly, you can import a pre-configured, shared manager instance.
-
-**You still must render the `<OverlayManager>` component** and pass this default instance to it.
+The package also exports `overlays`, a shared manager with an empty registry. It suits client-only apps that open components directly. You still render `<OverlayManager>` with it. Do not use it in server-rendered apps, because the module-level instance is shared by every request on the server.
 
 ```tsx
 // src/App.tsx
@@ -164,13 +161,14 @@ export default function App() {
   return (
     <>
       <MyPage />
-      {/* Render the manager, passing the default 'overlays' instance */}
       <OverlayManager manager={overlays} />
     </>
   );
 }
+```
 
-// Then, from any other file:
+```tsx
+// Any other file
 import { overlays } from '@react-overlay-manager/core';
 import { MyDialog } from './components/MyDialog';
 
@@ -181,127 +179,125 @@ function handleClick() {
 
 ---
 
-## API Reference
+## API reference
 
-### Manager Methods
+### Manager methods
 
-| Method              | Signature                | Notes                                                                                     |
-| :------------------ | :----------------------- | :---------------------------------------------------------------------------------------- |
-| `open`              | `open(keyOrComp, opts?)` | Opens an overlay. Returns a `PromiseWithId` that resolves when `close(result)` is called. |
-| `hide`              | `hide(id)`               | Hides an overlay by setting `visible=false`. The component remains mounted.               |
-| `show`              | `show(id)`               | Re-shows a hidden overlay. Throws `OverlayNotFoundError` if the ID is invalid.            |
-| `update`            | `update(id, props)`      | Merges new props into an existing overlay, triggering a re-render.                        |
-| `closeAll`          | `closeAll()`             | Closes all open overlays, respecting their individual exit animations.                    |
-| `isOpen`            | `isOpen(id)`             | Returns `true` if an overlay with the given ID exists in the manager.                     |
-| `getInstance`       | `getInstance(id)`        | Returns the runtime instance (`{ id, props, visible, ... }`) or `undefined`.              |
-| `getInstancesByKey` | `getInstancesByKey(key)` | Returns an array of all instances opened from a specific registry key.                    |
-| `getOpenCount`      | `getOpenCount()`         | Returns the number of overlays currently in the stack.                                    |
+| Method              | Signature                | Notes                                                                                                                                                    |
+| :------------------ | :----------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`              | `open(keyOrComp, opts?)` | Opens an overlay and returns a `PromiseWithId` that resolves when `close(result)` is called. See [IDs, reopening and errors](#ids-reopening-and-errors). |
+| `hide`              | `hide(id)`               | Sets `visible` to `false`. The component stays mounted and the promise stays pending. Does nothing if the ID is unknown.                                 |
+| `show`              | `show(id)`               | Sets `visible` to `true`. Throws `OverlayNotFoundError` if the ID is unknown.                                                                            |
+| `update`            | `update(id, props)`      | Merges props into an open overlay. Throws `OverlayNotFoundError` if the ID is unknown.                                                                   |
+| `closeAll`          | `closeAll()`             | Calls `close()` on every overlay, so each promise resolves with `undefined`. Exit animations still run.                                                  |
+| `isOpen`            | `isOpen(id)`             | `true` while an overlay with this ID is in the manager, including while it is hidden or playing its exit animation.                                      |
+| `getInstance`       | `getInstance(id)`        | Returns the runtime instance (`{ id, props, visible, ... }`) or `undefined`.                                                                             |
+| `getInstancesByKey` | `getInstancesByKey(key)` | Returns every instance opened from one registry key.                                                                                                     |
+| `getOpenCount`      | `getOpenCount()`         | Number of overlays in the stack, including hidden ones and ones still exiting.                                                                           |
 
-### Injected Overlay Props
+### Injected overlay props
 
-These props are automatically passed to every overlay component.
+The manager passes these props to every overlay component.
 
-| Prop               | Type                | Purpose                                                                         |
-| :----------------- | :------------------ | :------------------------------------------------------------------------------ |
-| `id`               | `OverlayId`         | A unique, stable identifier for the overlay instance.                           |
-| `visible`          | `boolean`           | `true` when the overlay should be visible. Drives enter/exit animations.        |
-| `hide()`           | `() => void`        | Hides the overlay without unmounting it or resolving its promise.               |
-| `close()`          | `(result?) => void` | Resolves the `open()` promise and begins the exit/removal process.              |
-| `onExitComplete()` | `() => void`        | Manually tells the manager the exit animation is done, causing instant removal. |
+| Prop               | Type                 | Purpose                                                                                                  |
+| :----------------- | :------------------- | :------------------------------------------------------------------------------------------------------- |
+| `id`               | `OverlayId`          | The overlay's ID.                                                                                        |
+| `visible`          | `boolean`            | `true` while the overlay should be shown. Use it to drive enter and exit animations.                     |
+| `hide()`           | `() => void`         | Hides the overlay without unmounting it or resolving its promise.                                        |
+| `close()`          | `(result?) => void`  | Resolves the `open()` promise and starts the exit and removal process.                                   |
+| `onExitComplete()` | `() => void`         | Tells the manager the exit animation has finished, which removes the overlay immediately.                |
+| `manager`          | `OverlayManagerBase` | The manager that opened this overlay. See [Nested overlays](#nested-overlays-with-the-injected-manager). |
+
+### `<OverlayManager />` props
+
+| Prop                  | Type                           | Default                       | Purpose                                                                                                       |
+| :-------------------- | :----------------------------- | :---------------------------- | :------------------------------------------------------------------------------------------------------------ |
+| `manager`             | `OverlayManagerCore`           | Required                      | The manager from `createOverlayManager`, or the shared `overlays`.                                            |
+| `zIndexBase`          | `number`                       | `100`                         | `z-index` of the first overlay container. Each later overlay uses `zIndexBase + index`.                       |
+| `defaultExitDuration` | `number` \| `null`             | `undefined`                   | Fallback exit timer in milliseconds. `0` removes immediately. `null` disables the timer.                      |
+| `portalTarget`        | `HTMLElement` \| `null`        | `document.body` on the client | Default portal element for overlays opened after this value is applied. `open()` can override it per overlay. |
+| `stackingBehavior`    | `'stack'` \| `'hide-previous'` | `'hide-previous'`             | Default stacking mode. `open()` can override it per overlay.                                                  |
+
+`<OverlayManager>` renders nothing on the server and on the first client render. Overlays appear after it mounts.
+
+### `open()` options
+
+The second argument to `open()` holds the component's props plus these options:
+
+| Option             | Type                           | Purpose                                                                          |
+| :----------------- | :----------------------------- | :------------------------------------------------------------------------------- |
+| `id`               | `OverlayId`                    | Explicit ID. If omitted, the manager generates one.                              |
+| `exitDuration`     | `number` \| `null`             | Exit timer for this overlay. `0` removes immediately. `null` disables the timer. |
+| `portalTarget`     | `HTMLElement` \| `null`        | Portal element for this overlay. `null` renders nothing for it.                  |
+| `stackingBehavior` | `'stack'` \| `'hide-previous'` | Stacking mode for this overlay.                                                  |
 
 ---
 
-### `<OverlayManager />` Props
+## React hook: `useOverlayStore`
 
-| Prop                  | Type                           | Default                                 | Purpose                                                                                                  |
-| :-------------------- | :----------------------------- | :-------------------------------------- | :------------------------------------------------------------------------------------------------------- |
-| `manager`             | `OverlayManagerCore`           | —                                       | The manager instance created by `createOverlayManager` (or the shared `overlays`).                       |
-| `zIndexBase`          | `number`                       | `100`                                   | Base `z-index` applied to the first overlay container; each subsequent overlay uses `base + index`.      |
-| `defaultExitDuration` | `number` \| `null`             | `undefined`                             | Global fallback for exit removal. `0` = remove immediately. `null` = disable timer, use events/callback. |
-| `portalTarget`        | `HTMLElement` \| `null`        | `document.body` (client) / `null` (SSR) | Default portal element for all overlays. Can be overridden per `open()` call.                            |
-| `stackingBehavior`    | `'stack'` \| `'hide-previous'` | `'hide-previous'`                       | Global stacking mode; can be overridden per `open()` call.                                               |
-
----
-
-### `open()` Options (OpenOptions)
-
-The second argument to `open()` merges your component props with a few manager options:
-
-| Option             | Type                           | Purpose                                                                                         |
-| :----------------- | :----------------------------- | :---------------------------------------------------------------------------------------------- |
-| `id`               | `OverlayId`                    | Optional explicit ID. If omitted, a unique one is generated.                                    |
-| `exitDuration`     | `number` \| `null`             | Per-instance exit timer. `0` = remove immediately. `null` = disable timer, use events/callback. |
-| `portalTarget`     | `HTMLElement` \| `null`        | Per-instance portal target. Overrides `<OverlayManager portalTarget={...} />`.                  |
-| `stackingBehavior` | `'stack'` \| `'hide-previous'` | Per-instance stacking mode. Overrides global `stackingBehavior`.                                |
-
-## React Hook: `useOverlayStore`
-
-For building custom UI that reacts to the overlay state, `useOverlayStore` provides an efficient way to subscribe to changes. It's powered by `useSyncExternalStore` and only triggers re-renders when the selected state changes.
+`useOverlayStore` subscribes a component to a slice of the manager state. The component re-renders only when the selected value changes, compared with `Object.is`.
 
 ```tsx
+import { useEffect } from 'react';
 import { useOverlayStore } from '@react-overlay-manager/core';
 import { overlayManager } from './services/overlayManager';
 
-function GlobalBlocker() {
+function ScrollLock() {
   const isAnyOverlayOpen = useOverlayStore(
     overlayManager,
     (state) => state.overlayStack.length > 0
   );
 
-  // Block background scroll when any overlay is open
   useEffect(() => {
-    document.body.style.overflow = isAnyOverlayOpen ? 'hidden' : 'auto';
+    document.body.style.overflow = isAnyOverlayOpen ? 'hidden' : '';
   }, [isAnyOverlayOpen]);
 
   return null;
 }
 ```
 
----
-
-## Exit Behavior & Animations
-
-When you call `close()`, the manager sets `visible = false` and waits to unmount the component. By default, if you **do not** provide any `exitDuration`, the manager relies on CSS events to remove the overlay.
-
-Unmounting happens on the **first** of these events to occur:
-
-1.  **CSS Event (Default)**: A `transitionend` or `animationend` event fires on the overlay's root container. This is the "happy path" for CSS-based animations.
-2.  **Timer**: A timeout completes. This is a fallback or primary method if you don't use CSS animations.
-3.  **Manual Callback**: You explicitly call the injected `onExitComplete()` function. This is required for animation libraries like Framer Motion.
-
-> **Warning:** If your component has no CSS transitions/animations on its root element, and you don't set an `exitDuration`/`defaultExitDuration`, the overlay will become invisible after `close()` but will **never be removed from the DOM**. To avoid this, either add a CSS transition, set an `exitDuration`/`defaultExitDuration`, or call `onExitComplete()` manually.
-
-The precedence for timers is:
-
-1. `options.exitDuration === null`: Disables the timer completely. Relies solely on CSS events or `onExitComplete`.
-2. `options.exitDuration` (number): Uses the per-instance duration.
-3. `<OverlayManager defaultExitDuration={...} />`: Uses the global fallback duration.
-
-> **Important**: The manager listens for `transitionend`/`animationend` on the **container `<div>` it renders**, not on your component's nested elements. These events do bubble, so child animations will usually be detected. Some libraries or patterns may not emit native events; in that case, set a timer or call `onExitComplete()` manually. The library safely handles multiple redundant events, so you don't have to worry about race conditions.
+Return primitives or stable references from the selector. A selector that builds a new array or object on every call re-renders on every manager change.
 
 ---
 
-## Stacking Behavior
+## Exit behavior and animations
 
-You can control how overlays behave when new ones are opened on top of them.
+`close()` resolves the promise, sets `visible` to `false` and keeps the overlay mounted until one of these happens first:
 
-The precedence is: `open()` options > `<OverlayManager />` prop > default (`'hide-previous'`).
+1. A `transitionend` or `animationend` event reaches the container `<div>` the manager renders around your component. Events from nested elements bubble up to it.
+2. The exit timer runs out.
+3. Your component calls `onExitComplete()`. Animation libraries such as Framer Motion need this.
 
-| Behavior                        | Description                                                                                                                    | Use Case                                                       |
-| :------------------------------ | :----------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------- |
-| **`'hide-previous'`** (Default) | Opening a new overlay sets `visible = false` on the one below it. Closing the top one automatically re-shows the previous one. | Modal dialogs, where only one should be interactive at a time. |
-| **`'stack'`**                   | New overlays open on top, and previous ones remain visible.                                                                    | Toasts, notifications, or non-modal pop-ups.                   |
+The exit timer comes from the first of these that is set:
 
-**Example:**
+1. `exitDuration` passed to `open()`. `null` disables the timer for that overlay.
+2. `defaultExitDuration` on `<OverlayManager>`.
+
+> **Warning:** With no exit timer, no CSS transition or animation and no `onExitComplete()` call, the overlay becomes invisible after `close()` but stays in the DOM and in the stack.
+
+Redundant events and calls are safe. The overlay is removed once.
+
+---
+
+## Stacking behavior
+
+The stacking mode is taken from `open()` options first, then the `<OverlayManager>` prop, then the default `'hide-previous'`.
+
+| Behavior                    | Effect                                                                                                | Typical use                                 |
+| :-------------------------- | :---------------------------------------------------------------------------------------------------- | :------------------------------------------ |
+| `'hide-previous'` (default) | Opening an overlay hides the top one. Closing it shows the nearest overlay below that is not closing. | Modal dialogs where one is active at a time |
+| `'stack'`                   | New overlays open on top and earlier ones stay visible.                                               | Toasts and non-modal popups                 |
 
 ```tsx
-// Globally set all overlays to stack
-<OverlayManager manager={overlayManager} stackingBehavior="stack" />;
+// Stack every overlay by default
+<OverlayManager manager={overlayManager} stackingBehavior="stack" />
+```
 
-// But override for a specific modal
+```tsx
+// Override the mode for one modal
 overlayManager.open('confirm', {
   message: 'Are you sure?',
-  stackingBehavior: 'hide-previous', // This one will hide overlays beneath it
+  stackingBehavior: 'hide-previous',
 });
 ```
 
@@ -309,64 +305,58 @@ overlayManager.open('confirm', {
 
 ## DevTools
 
-Install the DevTools package to inspect your overlay stack in development.
+The DevTools package adds a floating panel that lists open overlays and their props.
 
 ```bash
 pnpm add -D @react-overlay-manager/devtools
 ```
 
-Render the component next to your `OverlayManager`. It automatically does nothing in production.
+Render it next to `<OverlayManager>` and pass the same manager instance. With a different instance the panel stays empty.
 
 ```tsx
+import { OverlayManager } from '@react-overlay-manager/core';
 import { OverlayManagerDevtools } from '@react-overlay-manager/devtools';
 
 function App() {
   return (
     <>
       <OverlayManager manager={overlayManager} />
-      {/* DevTools will only render in development builds */}
       <OverlayManagerDevtools manager={overlayManager} />
     </>
   );
 }
 ```
 
-Toggle with **`Ctrl/Cmd + Shift + O`**.
-
-> **Warning**: Ensure you pass the **exact same `manager` instance** to both `<OverlayManager />` and `<OverlayManagerDevtools />`. Using different instances is a common cause for the DevTools appearing empty. Props shown in DevTools may contain sensitive data; its use is intended for development only.
+Toggle the panel with `Ctrl/Cmd + Shift + O`. `OverlayManagerDevtools` renders nothing when `process.env.NODE_ENV` is not `'development'`. The panel shows overlay props, so it can display sensitive data. See the [DevTools README](https://github.com/Maku4/react-overlay-manager/blob/main/packages/devtools/README.md) for details.
 
 ---
 
 ## Examples
 
-### CSS Transitions
+### CSS transitions
 
-A minimal example using pure CSS class toggle to drive animations. The manager's built-in `transitionend` listener handles removal automatically because the `transition` property is on the root element.
+Put the transition on the root element of your overlay. The manager removes the overlay when the `transitionend` event bubbles up to its container.
 
 ```tsx
 // Spinner.tsx
 import { defineOverlay } from '@react-overlay-manager/core';
 import './spinner.css';
 
-export const Spinner = defineOverlay<{}, void>(({ visible }) => {
-  // Apply 'enter' or 'exit' class based on the `visible` prop
-  return (
-    <div className={`backdrop ${visible ? 'enter' : 'exit'}`}>
-      <div className="spinner" />
-    </div>
-  );
-});
+export const Spinner = defineOverlay<object, void>(({ visible }) => (
+  <div className={`backdrop ${visible ? 'enter' : 'exit'}`}>
+    <div className="spinner" />
+  </div>
+));
 ```
 
 ```css
 /* spinner.css */
-/* The transition must be on the root element that OverlayItem renders */
 .backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.3);
   opacity: 0;
-  transition: opacity 200ms ease; /* This transition is key */
+  transition: opacity 200ms ease;
 }
 .backdrop.enter {
   opacity: 1;
@@ -374,12 +364,11 @@ export const Spinner = defineOverlay<{}, void>(({ visible }) => {
 .backdrop.exit {
   opacity: 0;
 }
-/* ... spinner styles ... */
 ```
 
 ### Framer Motion
 
-For animation libraries, use `AnimatePresence` and call `onExitComplete` when the animation finishes. This gives you precise control and instant removal.
+Use `AnimatePresence` and pass it the injected `onExitComplete`.
 
 ```tsx
 // MotionDialog.tsx
@@ -387,246 +376,310 @@ import { defineOverlay } from '@react-overlay-manager/core';
 import { AnimatePresence, motion } from 'framer-motion';
 
 export const MotionDialog = defineOverlay<{ title: string }, void>(
-  ({ title, visible, close, onExitComplete }) => {
-    return (
-      <AnimatePresence onExitComplete={onExitComplete}>
-        {visible && <motion.div /* ... */>{/* ... */}</motion.div>}
-      </AnimatePresence>
-    );
-  }
+  ({ title, visible, close, onExitComplete }) => (
+    <AnimatePresence onExitComplete={onExitComplete}>
+      {visible && (
+        <motion.div
+          role="dialog"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <h2>{title}</h2>
+          <button onClick={() => close()}>Close</button>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
 );
 ```
 
-To rely solely on `onExitComplete`, disable the fallback timer:
+To rely only on `onExitComplete`, disable the exit timer for one overlay or for all of them:
 
 ```tsx
-// Option 1: Per-call
 await overlayManager.open(MotionDialog, {
   title: 'Welcome',
-  exitDuration: null, // Disables the timer for this instance
-});
-
-// Option 2: Globally (recommended for animation libraries)
-<OverlayManager manager={overlayManager} defaultExitDuration={null} />;
-```
-
----
-
-## TypeScript Guide
-
-### Async/Await and `PromiseWithId`
-
-The `open()` method returns a `PromiseWithId<TResult>`, which is a standard `Promise` with an added `id` property. This lets you access the overlay's ID immediately, even if you `await` the result later.
-
-```ts
-// Get the ID synchronously, then await the result
-const promise = overlayManager.open('confirm', { message: 'Proceed?' });
-const id = promise.id; // `id` is typed as OverlayId
-
-const ok = await promise; // `ok` is typed as boolean
-
-// Or with async/await, though you lose direct access to the promise object
-const result: boolean = await overlayManager.open('confirm', {
-  message: 'Again?',
+  exitDuration: null,
 });
 ```
-
-### Compile-time Errors for Wrong Props
-
-The manager enforces props at compile time, preventing common bugs.
-
-```ts
-// Assuming 'confirm' expects: { message: string }
-overlayManager.open('confirm', {
-  message: 123, // ❌ Type 'number' is not assignable to type 'string'.
-  unknownProp: true, // ❌ Object literal may only specify known properties.
-});
-```
-
----
-
-## Advanced Patterns
-
-### Central Registry with `React.lazy`
-
-For better code-splitting, use `React.lazy` in your registry. Wrap your `<OverlayManager>` in a single `<Suspense>` at the app root to handle loading states without flicker.
 
 ```tsx
-// overlays.ts
-import { createOverlayManager } from '@react-overlay-manager/core';
-import React, { lazy } from 'react';
+<OverlayManager manager={overlayManager} defaultExitDuration={null} />
+```
 
-export const overlays = createOverlayManager({
+---
+
+## TypeScript guide
+
+### `PromiseWithId`
+
+`open()` returns a `PromiseWithId<TResult>`: a regular `Promise` with an `id` property. The ID is available before the promise settles.
+
+```ts
+const promise = overlayManager.open('confirm', { message: 'Proceed?' });
+const id = promise.id; // OverlayId
+
+const ok = await promise; // boolean
+```
+
+### Compile-time errors for wrong props
+
+```ts
+// 'confirm' expects { message: string }
+overlayManager.open('confirm', {
+  message: 123, // Type 'number' is not assignable to type 'string'.
+  unknownProp: true, // Object literal may only specify known properties.
+});
+```
+
+---
+
+## Advanced patterns
+
+### Lazy registry entries
+
+Registry entries can be `React.lazy` components. Wrap `<OverlayManager>` in a `<Suspense>` boundary.
+
+```tsx
+// overlayManager.ts
+import { lazy } from 'react';
+import { createOverlayManager } from '@react-overlay-manager/core';
+
+export const overlayManager = createOverlayManager({
   confirm: lazy(() => import('./dialogs/ConfirmDialog')),
   settings: lazy(() => import('./dialogs/SettingsModal')),
 });
+```
 
+```tsx
 // App.tsx
-<Suspense fallback={<GlobalSpinner />}>
-  <OverlayManager manager={overlays} />
-</Suspense>;
+<Suspense fallback={null}>
+  <OverlayManager manager={overlayManager} />
+</Suspense>
 ```
 
 ### Using `open()` without `await`
 
-Sometimes you want to fire-and-forget an overlay, like a loading spinner. You can grab the `id` to close it programmatically later.
+Keep the returned promise when you need the ID later, for example to close a loading spinner registered as `spinner`.
 
 ```tsx
-// Show a spinner and don't wait for a result
 const spinner = overlayManager.open('spinner');
 
 try {
   await someAsyncTask();
 } finally {
-  // Close the spinner by its ID when the task is done
   overlayManager.getInstance(spinner.id)?.close();
 }
 ```
 
-### Nested overlays with the injected manager (concise and type-safe)
+### Nested overlays with the injected manager
 
-Overlays receive a `manager` prop. Use it to open other overlays (nested modals) and keep
-key-based typing by narrowing with `manager.as<...>()`. This avoids circular imports when the
-overlay is part of the same registry.
-
-- **Why**
-  - Avoids circular types/imports
-  - Keeps nested `open('key', ...)` fully type-safe
-
-Define your manager in a separate module and export its type:
+Every overlay receives the `manager` that opened it. Use it to open another overlay from an event handler. `manager.as<Registry>()` restores key-based typing without importing the manager value, which avoids a circular import when both overlays are in the same registry. `as()` is a type-level cast with no runtime effect.
 
 ```ts
+// src/services/overlayManager.ts
 import { createOverlayManager } from '@react-overlay-manager/core';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ValidationModal } from '../components/ValidationModal';
-// ...other overlays
 
 export const overlayManager = createOverlayManager({
-  validationModal: ValidationModal,
-  // confirmModal: ConfirmModal, ...
+  confirm: ConfirmDialog,
+  validation: ValidationModal,
 });
 
-export type AppOverlayManager = typeof overlayManager;
+export type AppRegistry = typeof overlayManager.registry;
 ```
 
-````ts
-import type { AppOverlayManager } from '../services/overlayManager';
+```tsx
+// src/components/ValidationModal.tsx
+import { defineOverlay } from '@react-overlay-manager/core';
+import type { AppRegistry } from '../services/overlayManager';
+
+export interface ValidationModalProps {
+  errors: string[];
+}
 
 export const ValidationModal = defineOverlay<ValidationModalProps, void>(
-  ({ manager, ...props }) => {
-    manager
-      .as<AppOverlayManager['registry']>()
-      .open('confirmModal', { /* ... */ });
+  ({ errors, manager, close }) => {
+    async function discard() {
+      const confirmed = await manager
+        .as<AppRegistry>()
+        .open('confirm', { message: 'Discard your changes?' });
+      if (confirmed) close();
+    }
 
-    // or open by component directly (no key)
-    // manager.open(ConfirmModal, { /* ... */ });
-    return null;
+    return (
+      <div role="dialog" aria-label="Validation errors">
+        <ul>
+          {errors.map((error) => (
+            <li key={error}>{error}</li>
+          ))}
+        </ul>
+        <button onClick={discard}>Discard</button>
+      </div>
+    );
   }
 );
+```
 
-You can also dynamically import the manager to avoid circular imports:
-
-```ts
-const { overlayManager } = await import('../services/overlayManager');
-overlayManager.open('confirmModal', { /* ... */ });
-````
+`manager.open(ConfirmDialog, { ... })` also works and needs no registry type.
 
 ---
 
-## Edge Cases & Error Handling
+## IDs, reopening and errors
 
-- **`OverlayAlreadyOpenError`**: Thrown if you call `open()` with an `id` that is already visible.
-  - **Solution**: Omit the `id` to let the manager auto-generate a unique one. Alternatively, calling `open()` with the ID of a _hidden_ overlay will show and update it instead of throwing an error.
-- **`OverlayNotFoundError`**: Thrown if you call `hide()`, `show()`, or `update()` on an ID that has already been closed and removed.
-  - **Solution**: In complex async flows, guard your calls: `if (manager.isOpen(id)) manager.hide(id);` or wrap them in a `try/catch` block.
+Generated IDs look like `overlay_0`. Pass `id` to `open()` to address an overlay by a name you choose. What `open()` does with an existing ID depends on the overlay's state:
+
+| State of the overlay with that ID                      | Result of `open()` with the same `id`                                                                  |
+| :----------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| Visible                                                | Throws `OverlayAlreadyOpenError`.                                                                      |
+| Hidden by `hide()` or by `'hide-previous'` stacking    | Merges the new props, shows it and returns the original promise.                                       |
+| Closing (`close()` was called, exit animation running) | Removes the exiting overlay and opens a new one with a new promise. Old callbacks no longer affect it. |
+| Removed                                                | Opens a new overlay with a new promise.                                                                |
+
+`show()` and `update()` throw `OverlayNotFoundError` for an ID that is not in the manager. `hide()` ignores unknown IDs. In async flows, check `isOpen(id)` first or catch the error.
 
 ---
 
-## SSR / Next.js
+## SSR and Next.js
 
-The library is SSR-safe. It avoids accessing `window` or `document` on the server.
+`<OverlayManager>` and `<OverlayManagerDevtools>` use hooks and browser APIs, so render them from a client component. In the Next.js App Router, that file must start with the `'use client'` directive.
 
-- **`portalTarget`**: On the server, overlays render inline as `defaultPortalTarget` is `null`. On the client, it defaults to `document.body`. You can provide a stable portal element for better DOM structure.
-- **Code-splitting**: Use `next/dynamic` to prevent overlay components from being included in the initial server bundle.
+Follow these rules when rendering on the server:
+
+- Create the manager inside a provider with `useState`, not at module level. A module-level manager on the server is shared by every request.
+- Do not read `document`, `window` or `sessionStorage` during render. Read them in an effect.
+- `<OverlayManager>` renders nothing on the server and on the first client render, so hydration matches. Overlays appear after mount.
+- DevTools also render closed on the server and restore a panel left open in the same browser tab after mount.
+
+```tsx
+// app/overlays.tsx
+'use client';
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  createOverlayManager,
+  OverlayManager,
+} from '@react-overlay-manager/core';
+import { OverlayManagerDevtools } from '@react-overlay-manager/devtools';
+import { ConfirmDialog } from './ConfirmDialog';
+
+const createAppOverlays = () =>
+  createOverlayManager({ confirm: ConfirmDialog });
+type AppOverlays = ReturnType<typeof createAppOverlays>;
+
+const OverlaysContext = createContext<AppOverlays | null>(null);
+
+export function useOverlays() {
+  const manager = useContext(OverlaysContext);
+  if (!manager) throw new Error('useOverlays needs <OverlaysProvider>');
+  return manager;
+}
+
+export function OverlaysProvider({ children }: { children: ReactNode }) {
+  // One manager per provider instance, so server requests never share state
+  const [manager] = useState(createAppOverlays);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement>();
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById('overlay-portal') ?? undefined);
+  }, []);
+
+  return (
+    <OverlaysContext.Provider value={manager}>
+      {children}
+      <OverlayManager manager={manager} portalTarget={portalTarget} />
+      <OverlayManagerDevtools manager={manager} />
+    </OverlaysContext.Provider>
+  );
+}
+```
 
 ```tsx
 // app/layout.tsx
-export default function RootLayout({ children }) {
+import type { ReactNode } from 'react';
+import { OverlaysProvider } from './overlays';
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html>
+    <html lang="en">
       <body>
-        {children}
-        {/* A dedicated portal target for overlays */}
+        <OverlaysProvider>{children}</OverlaysProvider>
         <div id="overlay-portal" />
       </body>
     </html>
   );
 }
+```
 
-// app/Providers.tsx
-('use client');
-import { OverlayManager } from '@react-overlay-manager/core';
-import { overlays } from './overlays';
+```tsx
+// app/DeleteButton.tsx
+'use client';
 
-export function Providers({ children }) {
-  return (
-    <>
-      {children}
-      <OverlayManager
-        manager={overlays}
-        portalTarget={document.getElementById('overlay-portal')}
-      />
-    </>
-  );
+import { useOverlays } from './overlays';
+
+export function DeleteButton() {
+  const overlays = useOverlays();
+
+  async function onClick() {
+    if (await overlays.open('confirm', { message: 'Delete this item?' })) {
+      // ...delete logic
+    }
+  }
+
+  return <button onClick={onClick}>Delete</button>;
 }
 ```
+
+Passing `undefined` as `portalTarget` until the element is found keeps the default `document.body`. An overlay keeps the portal target it was opened with.
 
 ---
 
 ## Accessibility
 
-This library is headless and unopinionated about your markup. It is your responsibility to make your overlay components accessible. Key considerations include:
+The library renders no dialog markup of its own, so accessibility is up to your overlay components:
 
-- **Roles**: Use `role="dialog"` or `role="alertdialog"`.
-- **Labels**: Provide an accessible name with `aria-labelledby` and/or `aria-describedby`.
-- **Modality**: Use `aria-modal="true"` for modal dialogs.
-- **Focus Management**: Trap focus within the overlay while it's open and return focus to the trigger element when it closes.
-- **Keyboard Navigation**: Allow closing with the `Escape` key.
+- Use `role="dialog"` or `role="alertdialog"`.
+- Give the dialog an accessible name with `aria-labelledby` or `aria-label`, and use `aria-describedby` for its description.
+- Set `aria-modal="true"` on modal dialogs.
+- Move focus into the overlay when it opens, keep it there while it is modal and return it to the trigger when it closes.
+- Close on `Escape`.
 
-Consider using the native HTML `<dialog>` element.
+The native `<dialog>` element covers several of these.
+
+The container the manager renders around each overlay gets `aria-hidden="true"` while the overlay is hidden.
 
 ---
 
 ## Troubleshooting
 
-1.  **Overlay doesn't disappear after animation:**
-    - Ensure your CSS `transition` or `animation` is on the **root element** of your overlay component.
-    - If animations are nested or you don't use CSS animations, you must either set an `exitDuration`/`defaultExitDuration` or call `onExitComplete()` manually.
-2.  **`OverlayAlreadyOpenError`:**
-    - You are trying to `open()` an overlay with an `id` that is already visible. Let the manager generate IDs automatically by omitting the `id` option.
-3.  **Overlays appear behind other content:**
-    - Check for parent elements with a `z-index` and `position` that create a new stacking context. The `<OverlayManager zIndexBase={...} />` prop can help, but portals are the best solution. Render overlays into a dedicated portal element at the end of `<body>`.
+1. **The overlay stays in the DOM after closing.**
+   - Put the CSS `transition` or `animation` on the root element of the overlay component.
+   - Otherwise set `exitDuration` or `defaultExitDuration`, or call `onExitComplete()`.
+2. **`OverlayAlreadyOpenError`.**
+   - An overlay with that `id` is visible. Omit `id` to get a generated one, or close the visible overlay first.
+3. **Overlays appear behind other content.**
+   - A parent with `position` and `z-index` can create a stacking context. Render overlays into a portal element at the end of `<body>` and adjust `zIndexBase` if needed.
+4. **DevTools show no overlays.**
+   - Pass the same manager instance to `<OverlayManager>` and `<OverlayManagerDevtools>`.
 
 ---
 
-## Bundling & Versioning
+## Bundling and versioning
 
-- The library ships with CJS and ESM formats, with type definitions (`.d.ts`).
-- `react` and `react-dom` are listed as `external` dependencies.
+- Each package ships CommonJS and ES module builds with TypeScript declarations.
+- `react` and `react-dom` are peer dependencies and are not bundled.
+- The core package exports its version: `import { version } from '@react-overlay-manager/core'`.
 
-- The current version is available as an export: `import { version } from '@react-overlay-manager/core'`.
+## Contributing and security
 
-## Quality & Coverage
-
-- **Runtime tests**: 66 tests across 22 files, with overall coverage: **Statements 96.64%**, **Branches 85.25%**, **Functions 93.67%**, **Lines 96.64%**.
-- **Type-level tests (tsd)**: 15 focused specs across core and devtools verifying generics and API contracts:
-  - `open()` overloads and argument optionality (by key and by component)
-  - `OverlayManagerProps` shape and constraints
-  - Helper types: `ComponentProps<T>`, `OverlayResult<T>`
-  - `AnyOverlayInstance` narrowing and typed instances
-  - Event typing (`ManagerEvent<T>`) and default manager usage
-  - Branded `OverlayId` in `OpenOptions.id`
-
-These checks run in CI to prevent regressions and ensure the library remains safe to adopt.
+See [CONTRIBUTING.md](https://github.com/Maku4/react-overlay-manager/blob/main/CONTRIBUTING.md) for setup and checks, and [SECURITY.md](https://github.com/Maku4/react-overlay-manager/blob/main/SECURITY.md) to report a vulnerability.
 
 ## License
 
