@@ -1,7 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useOverlayStore } from '../hooks/useOverlayStore';
-import type { OverlayManagerCore } from '../manager/OverlayManagerCore';
+import {
+  getOverlayRenderKey,
+  type OverlayManagerCore,
+} from '../manager/OverlayManagerCore';
 import type { OverlayRegistry, StackingBehavior } from '../types';
 import { OverlayItem } from './OverlayItem';
 
@@ -84,7 +87,8 @@ export function OverlayManager<TRegistry extends OverlayRegistry>({
     <>
       {overlayStack.map((id, index) => (
         <OverlayItem
-          key={id}
+          // Changes only when a closing ID is reopened, which remounts it
+          key={getOverlayRenderKey(manager, id)}
           id={id}
           manager={manager}
           zIndex={zIndexBase + index}

@@ -35,7 +35,23 @@ type Lifecycle = {
   promise: PromiseWithId<any>;
   closed: boolean;
   exitTimeout?: ReturnType<typeof setTimeout>;
+  // React key for this generation, so a reopened ID remounts its component
+  renderKey: string;
 };
+
+// Gives OverlayManager the render keys without adding them to the public class
+const lifecyclesByManager = new WeakMap<object, Map<OverlayId, Lifecycle>>();
+
+/**
+ * Returns the React key for the current generation of an overlay ID.
+ * @internal
+ */
+export function getOverlayRenderKey(
+  manager: OverlayManagerCore<any>,
+  id: OverlayId
+): string {
+  return lifecyclesByManager.get(manager)?.get(id)?.renderKey ?? id;
+}
 
 /**
  * The internal, type-safe overlay manager implementation.
@@ -53,6 +69,7 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
 
   // Lifecycle of the current generation of each open ID
   private lifecycles = new Map<OverlayId, Lifecycle>();
+  private nextGeneration = 0;
 
   public defaultExitDuration: number | null | undefined;
 
@@ -75,6 +92,7 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
   public readonly registry: TRegistry;
   constructor(registry: TRegistry) {
     this.registry = registry;
+    lifecyclesByManager.set(this, this.lifecycles);
 
     this.open = this.open.bind(this);
     this.hide = this.hide.bind(this);
@@ -117,7 +135,8 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     const options: OpenOptions<any> | undefined = args[0];
     const id = options?.id;
 
-    if (id && this.state.instances.has(id)) {
+    // '' is a valid ID, so only null and undefined mean "no ID"
+    if (id != null && this.state.instances.has(id)) {
       const instance = this.state.instances.get(id)!;
 
       const lifecycle = this.lifecycles.get(id)!;
@@ -126,8 +145,10 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
         throw new OverlayAlreadyOpenError(id);
       } else if (lifecycle.closed) {
         // The old promise has already resolved, so drop the exiting instance
-        // and fall through to open a fresh one under the same ID.
+        // and open a fresh one under the same ID. Starting over also covers a
+        // REMOVE listener that reopened the ID in the meantime.
         this.remove(id);
+        return this.open(keyOrComponent, ...args);
       } else {
         const newProps = this.stripInternalOptions(options);
         this.update(id, newProps);
@@ -325,7 +346,11 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     });
 
     const promiseWithId = Object.assign(promise, { id: runtimeId });
-    const lifecycle: Lifecycle = { promise: promiseWithId, closed: false };
+    const lifecycle: Lifecycle = {
+      promise: promiseWithId,
+      closed: false,
+      renderKey: String(this.nextGeneration++),
+    };
     this.lifecycles.set(runtimeId, lifecycle);
 
     // Callbacks captured by this generation must not act on a later one
@@ -390,7 +415,7 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
             isClosing: true,
           });
         }
-        if (previousOverlayIdToShow) {
+        if (previousOverlayIdToShow !== null) {
           const instanceToShow = nextInstances.get(previousOverlayIdToShow);
           if (instanceToShow) {
             nextInstances.set(previousOverlayIdToShow, {
@@ -404,9 +429,13 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
           overlayStack: this.state.overlayStack,
         };
 
+        // Listeners run synchronously and may reopen this ID. Once a newer
+        // generation exists, this close must not emit or remove anything else.
         this.notifyListeners({ type: 'HIDE', id: runtimeId });
-        if (previousOverlayIdToShow) {
+        if (!isCurrent()) return;
+        if (previousOverlayIdToShow !== null) {
           this.notifyListeners({ type: 'SHOW', id: previousOverlayIdToShow });
+          if (!isCurrent()) return;
         }
 
         const localDuration = options?.exitDuration;
@@ -447,7 +476,7 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
 
     const nextInstances = new Map(this.state.instances);
     nextInstances.set(runtimeId, instance as AnyOverlayInstance<TRegistry>);
-    if (previousOverlayId) {
+    if (previousOverlayId !== null) {
       const prev = nextInstances.get(previousOverlayId);
       if (prev) {
         nextInstances.set(previousOverlayId, {
@@ -460,7 +489,7 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     this.state = { instances: nextInstances, overlayStack: nextStack };
 
     this.notifyListeners({ type: 'OPEN', id: runtimeId, key, component });
-    if (previousOverlayId) {
+    if (previousOverlayId !== null) {
       this.notifyListeners({ type: 'HIDE', id: previousOverlayId });
     }
 
