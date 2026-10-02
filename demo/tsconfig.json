@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    // Same built package entry points the demo server aliases for Vite
+    "paths": {
+      "@react-overlay-manager/core": ["../packages/core"],
+      "@react-overlay-manager/devtools": ["../packages/devtools"]
+    }
+  },
+  "include": ["src"]
+}
