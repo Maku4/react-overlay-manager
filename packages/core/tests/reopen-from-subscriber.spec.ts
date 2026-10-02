@@ -10,7 +10,7 @@ it('keeps a new generation reopened by a synchronous close subscriber', async ()
   const Dialog = defineOverlay<object, string>(() => createElement('div'));
   const manager = createOverlayManager({ dialog: Dialog });
   const original = manager.open('dialog', { exitDuration: 0 });
-  let reopened: PromiseWithId<string> | undefined;
+  let reopened: PromiseWithId<string | undefined> | undefined;
   let handled = false;
   const unsubscribe = manager.subscribe((event) => {
     if (event.type === 'HIDE' && event.id === original.id && !handled) {

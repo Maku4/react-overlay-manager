@@ -33,7 +33,7 @@ expectError(overlays.open('confirm')); // ✓ Should error: expect 2 arguments
 
 // 2) Correct usage with required prop
 const p1 = overlays.open('confirm', { message: 'Are you sure?' });
-expectType<PromiseWithId<boolean>>(p1);
+expectType<PromiseWithId<boolean | undefined>>(p1);
 
 // 3) Wrong prop types rejected - number not assignable to string
 expectError(overlays.open('confirm', { message: 123 })); // ✓ TypeScript correctly rejects this
@@ -49,11 +49,11 @@ const p2 = overlays.open('confirm', {
   portalTarget: document.body,
   stackingBehavior: 'hide-previous',
 });
-expectType<PromiseWithId<boolean>>(p2);
+expectType<PromiseWithId<boolean | undefined>>(p2);
 
 // 6) exitDuration can be null (manual completion)
 const p3 = overlays.open('confirm', { message: 'hi', exitDuration: null });
-expectType<PromiseWithId<boolean>>(p3);
+expectType<PromiseWithId<boolean | undefined>>(p3);
 
 // 7) stackingBehavior literal types - invalid value
 // For tsd, we let TypeScript naturally reject the invalid literal
@@ -66,11 +66,11 @@ expectError(
 
 // 8) portalTarget accepts HTMLElement | null
 const p4 = overlays.open('confirm', { message: 'x', portalTarget: null });
-expectType<PromiseWithId<boolean>>(p4);
+expectType<PromiseWithId<boolean | undefined>>(p4);
 
 // 9) Open by component directly uses component prop type
 const p5 = overlays.open(Confirm, { message: 'direct' });
-expectType<PromiseWithId<boolean>>(p5);
+expectType<PromiseWithId<boolean | undefined>>(p5);
 
 // 10) For empty-props overlay, options should be optional
 type EmptyProps = object;

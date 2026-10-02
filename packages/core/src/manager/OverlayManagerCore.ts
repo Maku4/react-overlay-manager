@@ -124,7 +124,8 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
    *
    * @param keyOrComponent The key of the registered overlay or the component function itself.
    * @param options The props for the component, plus optional `id` and `exitDuration`.
-   * @returns A promise that resolves with the overlay's result, with an `id` property attached.
+   * @returns A promise with an `id` property. It resolves with the value passed to
+   * `close(result)`, or `undefined` when the overlay closes without a result.
    */
   public open<const T extends keyof TRegistry | OverlayComponent<any, any>>(
     keyOrComponent: T,
@@ -243,6 +244,10 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
     this.notifyListeners({ type: 'UPDATE', id, props });
   }
 
+  /**
+   * Closes every overlay without a result, so each `open()` promise resolves
+   * with `undefined`. Exit animations still run.
+   */
   closeAll() {
     const instanceIds = Array.from(this.state.instances.keys());
     instanceIds.forEach((id) => {

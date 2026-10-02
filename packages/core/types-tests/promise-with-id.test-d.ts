@@ -20,27 +20,27 @@ const Comp: OverlayComponent<Props, Result> = defineOverlay<Props, Result>(
 
 const mgr = createOverlayManager({ comp: Comp });
 
-// 1) open returns PromiseWithId<Result>
+// 1) open returns PromiseWithId<Result | undefined>; undefined means closed without a result
 const p = mgr.open('comp', { title: 'x' });
-expectType<PromiseWithId<Result>>(p);
+expectType<PromiseWithId<Result | undefined>>(p);
 
 // 2) promise.id has OverlayId type
 expectType<OverlayId>(p.id);
 
-// 3) awaited result is Result
+// 3) awaited result is Result or undefined
 async function testAwait() {
   const r = await mgr.open('comp', { title: 'y' });
-  expectType<Result>(r);
+  expectType<Result | undefined>(r);
 }
 // reference to avoid no-unused warning in tsd
 void testAwait;
 
-// 4) then chain infers Result
+// 4) then chain infers Result or undefined
 mgr.open('comp', { title: 'z' }).then((r) => {
-  expectType<Result>(r);
+  expectType<Result | undefined>(r);
 });
 
 // 5) open by component directly preserves types
 const p2 = mgr.open(Comp, { title: 'k' });
-expectType<PromiseWithId<Result>>(p2);
+expectType<PromiseWithId<Result | undefined>>(p2);
 expectType<OverlayId>(p2.id);

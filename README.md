@@ -23,6 +23,8 @@ A type-safe overlay system for React 18 and 19 with optional DevTools.
   - [Framer Motion](#framer-motion)
 - [TypeScript guide](#typescript-guide)
   - [`PromiseWithId`](#promisewithid)
+  - [Results and cancellation](#results-and-cancellation)
+  - [Upgrading from 0.4](#upgrading-from-04)
   - [Compile-time errors for wrong props](#compile-time-errors-for-wrong-props)
 - [Advanced patterns](#advanced-patterns)
   - [Lazy registry entries](#lazy-registry-entries)
@@ -121,7 +123,7 @@ export default function App() {
 
 ### 4. Open an overlay
 
-Call `open()` from a component, hook or service. It returns a promise that resolves with the value passed to `close()`.
+Call `open()` from a component, hook or service. It returns a promise that resolves with the value passed to `close(result)`, or with `undefined` when the overlay closes without a result.
 
 ```tsx
 import { overlayManager } from '../services/overlayManager';
@@ -129,13 +131,15 @@ import { overlayManager } from '../services/overlayManager';
 async function deleteItem() {
   const confirmed = await overlayManager.open('confirm', {
     message: 'Delete this item?',
-  }); // `confirmed` is a boolean
+  }); // `confirmed` is `boolean | undefined`
 
-  if (confirmed) {
+  if (confirmed === true) {
     // ...delete logic
   }
 }
 ```
+
+Here, answering "no" and closing the dialog without an answer both skip the deletion. When they need different handling, see [Results and cancellation](#results-and-cancellation).
 
 ### 5. Open a component directly
 
@@ -183,30 +187,30 @@ function handleClick() {
 
 ### Manager methods
 
-| Method              | Signature                | Notes                                                                                                                                                    |
-| :------------------ | :----------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `open`              | `open(keyOrComp, opts?)` | Opens an overlay and returns a `PromiseWithId` that resolves when `close(result)` is called. See [IDs, reopening and errors](#ids-reopening-and-errors). |
-| `hide`              | `hide(id)`               | Sets `visible` to `false`. The component stays mounted and the promise stays pending. Does nothing if the ID is unknown.                                 |
-| `show`              | `show(id)`               | Sets `visible` to `true`. Throws `OverlayNotFoundError` if the ID is unknown.                                                                            |
-| `update`            | `update(id, props)`      | Merges props into an open overlay. Throws `OverlayNotFoundError` if the ID is unknown.                                                                   |
-| `closeAll`          | `closeAll()`             | Calls `close()` on every overlay, so each promise resolves with `undefined`. Exit animations still run.                                                  |
-| `isOpen`            | `isOpen(id)`             | `true` while an overlay with this ID is in the manager, including while it is hidden or playing its exit animation.                                      |
-| `getInstance`       | `getInstance(id)`        | Returns the runtime instance (`{ id, props, visible, ... }`) or `undefined`.                                                                             |
-| `getInstancesByKey` | `getInstancesByKey(key)` | Returns every instance opened from one registry key.                                                                                                     |
-| `getOpenCount`      | `getOpenCount()`         | Number of overlays in the stack, including hidden ones and ones still exiting.                                                                           |
+| Method              | Signature                | Notes                                                                                                                                                                                                                                          |
+| :------------------ | :----------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`              | `open(keyOrComp, opts?)` | Opens an overlay and returns a `PromiseWithId` that resolves with the `close(result)` value, or `undefined` without one. See [Results and cancellation](#results-and-cancellation) and [IDs, reopening and errors](#ids-reopening-and-errors). |
+| `hide`              | `hide(id)`               | Sets `visible` to `false`. The component stays mounted and the promise stays pending. Does nothing if the ID is unknown.                                                                                                                       |
+| `show`              | `show(id)`               | Sets `visible` to `true`. Throws `OverlayNotFoundError` if the ID is unknown.                                                                                                                                                                  |
+| `update`            | `update(id, props)`      | Merges props into an open overlay. Throws `OverlayNotFoundError` if the ID is unknown.                                                                                                                                                         |
+| `closeAll`          | `closeAll()`             | Calls `close()` on every overlay, so each promise resolves with `undefined`. Exit animations still run.                                                                                                                                        |
+| `isOpen`            | `isOpen(id)`             | `true` while an overlay with this ID is in the manager, including while it is hidden or playing its exit animation.                                                                                                                            |
+| `getInstance`       | `getInstance(id)`        | Returns the runtime instance (`{ id, props, visible, ... }`) or `undefined`. Its `close` accepts the result type of any registry entry; it is not narrowed by the ID. See [Results and cancellation](#results-and-cancellation).               |
+| `getInstancesByKey` | `getInstancesByKey(key)` | Returns every instance opened from one registry key.                                                                                                                                                                                           |
+| `getOpenCount`      | `getOpenCount()`         | Number of overlays in the stack, including hidden ones and ones still exiting.                                                                                                                                                                 |
 
 ### Injected overlay props
 
 The manager passes these props to every overlay component.
 
-| Prop               | Type                 | Purpose                                                                                                  |
-| :----------------- | :------------------- | :------------------------------------------------------------------------------------------------------- |
-| `id`               | `OverlayId`          | The overlay's ID.                                                                                        |
-| `visible`          | `boolean`            | `true` while the overlay should be shown. Use it to drive enter and exit animations.                     |
-| `hide()`           | `() => void`         | Hides the overlay without unmounting it or resolving its promise.                                        |
-| `close()`          | `(result?) => void`  | Resolves the `open()` promise and starts the exit and removal process.                                   |
-| `onExitComplete()` | `() => void`         | Tells the manager the exit animation has finished, which removes the overlay immediately.                |
-| `manager`          | `OverlayManagerBase` | The manager that opened this overlay. See [Nested overlays](#nested-overlays-with-the-injected-manager). |
+| Prop               | Type                 | Purpose                                                                                                           |
+| :----------------- | :------------------- | :---------------------------------------------------------------------------------------------------------------- |
+| `id`               | `OverlayId`          | The overlay's ID.                                                                                                 |
+| `visible`          | `boolean`            | `true` while the overlay should be shown. Use it to drive enter and exit animations.                              |
+| `hide()`           | `() => void`         | Hides the overlay without unmounting it or resolving its promise.                                                 |
+| `close()`          | `(result?) => void`  | Resolves the `open()` promise with `result`, or `undefined` without one, and starts the exit and removal process. |
+| `onExitComplete()` | `() => void`         | Tells the manager the exit animation has finished, which removes the overlay immediately.                         |
+| `manager`          | `OverlayManagerBase` | The manager that opened this overlay. See [Nested overlays](#nested-overlays-with-the-injected-manager).          |
 
 ### `<OverlayManager />` props
 
@@ -413,14 +417,70 @@ await overlayManager.open(MotionDialog, {
 
 ### `PromiseWithId`
 
-`open()` returns a `PromiseWithId<TResult>`: a regular `Promise` with an `id` property. The ID is available before the promise settles.
+`open()` returns a `PromiseWithId<TResult | undefined>`: a regular `Promise` with an `id` property. It resolves with `undefined` when the overlay closes without a result. The ID is available before the promise settles.
 
 ```ts
 const promise = overlayManager.open('confirm', { message: 'Proceed?' });
 const id = promise.id; // OverlayId
 
-const ok = await promise; // boolean
+const ok = await promise; // boolean | undefined
 ```
+
+### Results and cancellation
+
+The `open()` promise resolves with the value passed to `close(result)`. It resolves with `undefined` when the overlay closes without a result:
+
+- `close()` called with no argument, for example by your backdrop click handler
+- `closeAll()`
+- the Close button in DevTools
+
+The result type includes this case. An overlay defined with `defineOverlay<Props, boolean>` opens as `PromiseWithId<boolean | undefined>`. Result types that already accept `undefined`, such as `void` and `unknown`, stay as they are. A `never` result becomes `undefined`. `OverlayResult<typeof Component>` gives the same type.
+
+Check for `undefined` when closing without an answer means something different from a `false` answer:
+
+```ts
+const choice = await overlayManager.open('confirm', {
+  message: 'Save your changes?',
+});
+
+if (choice === undefined) return; // closed without an answer, keep editing
+if (choice) save();
+else discard();
+```
+
+Inside an overlay, the injected `close` only accepts that overlay's result type. Outside an overlay, `getInstancesByKey(key)` returns instances whose `close` checks the result type of that registry entry. `getInstance(id)` is typed for any overlay in the manager, because an ID does not record which overlay it belongs to. In a registry with different result types, its `close` accepts the result type of any entry. Prefer the injected `close` or `getInstancesByKey(key)` when the result value matters.
+
+### Upgrading from 0.4
+
+In 0.5, `open()` result types include `undefined`. The runtime behavior is unchanged: closing without a result already resolved `undefined` in 0.4, but the types hid it. Code that used the result without a check can now fail to compile.
+
+Before:
+
+```ts
+const pending: PromiseWithId<boolean> = overlayManager.open('confirm', {
+  message: 'Proceed?',
+});
+const ok = await pending;
+ok.valueOf(); // compiled, but threw a TypeError after closeAll()
+```
+
+After:
+
+```ts
+const pending: PromiseWithId<boolean | undefined> = overlayManager.open(
+  'confirm',
+  { message: 'Proceed?' }
+);
+const ok = await pending;
+if (ok !== undefined) ok.valueOf();
+```
+
+To upgrade:
+
+- Add `| undefined` to annotations of `open()` results, including `PromiseWithId<...>` and `.then()` callback parameters.
+- Handle `undefined` before using a result. A truthiness check such as `if (ok)` treats closing without an answer like `false`. Compare with `undefined` when the two need different handling.
+- Code that uses `OverlayResult<typeof Component>` now receives `undefined` as well.
+- `defineOverlay<Props, Result>` declarations and calls to `close(result)` need no changes.
 
 ### Compile-time errors for wrong props
 
