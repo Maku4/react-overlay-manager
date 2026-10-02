@@ -46,7 +46,10 @@ export interface InjectedOverlayProps<TResult = unknown> {
   visible: boolean;
   /** A function to hide the overlay without destroying it. The overlay remains in the DOM. */
   hide: () => void;
-  /** A function to close the overlay, optionally returning a result. This initiates the removal process. */
+  /**
+   * Closes the overlay and resolves its `open()` promise with `result`, or with
+   * `undefined` when called without one. This initiates the removal process.
+   */
   close: (result?: TResult) => void;
   /**
    * A callback to signal that the exit animation has completed.
