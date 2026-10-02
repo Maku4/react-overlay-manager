@@ -19,6 +19,8 @@ import { ConfirmDialog } from './ConfirmDialog';
 const createAppOverlays = () =>
   createOverlayManager({ confirm: ConfirmDialog });
 type AppOverlays = ReturnType<typeof createAppOverlays>;
+// For `manager.as<AppRegistry>()` in nested overlays, imported with `import type`
+export type AppRegistry = AppOverlays['registry'];
 
 const OverlaysContext = createContext<AppOverlays | null>(null);
 
@@ -34,7 +36,8 @@ export function OverlaysProvider({ children }: { children: ReactNode }) {
   return (
     <OverlaysContext.Provider value={manager}>
       {children}
-      <OverlayManager manager={manager} />
+      {/* No exit animation in these overlays. With one, use a matching fallback timer */}
+      <OverlayManager manager={manager} defaultExitDuration={0} />
       <OverlayManagerDevtools manager={manager} />
     </OverlaysContext.Provider>
   );
