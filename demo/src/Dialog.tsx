@@ -19,7 +19,8 @@ interface DialogProps {
 /**
  * Modal dialog markup with focus handling. The overlay manager does not move,
  * trap or restore focus, so this component does it:
- * - focuses the element marked `data-autofocus` when the dialog is shown,
+ * - focuses the element marked `data-autofocus` when the dialog first opens,
+ *   and the control that had focus when it was hidden when it is shown again,
  * - keeps Tab and Shift+Tab inside the dialog,
  * - closes on Escape,
  * - returns focus to the previously focused element when hidden or closed.
@@ -28,6 +29,9 @@ export function Dialog({ title, visible, onDismiss, children }: DialogProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  // Control that had focus when the dialog was hidden, such as the button
+  // that opened a nested confirmation
+  const lastFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current!;
@@ -46,13 +50,24 @@ export function Dialog({ title, visible, onDismiss, children }: DialogProps) {
     ) {
       returnFocusRef.current = active;
     }
+    const last = lastFocusRef.current;
+    const resume =
+      last?.isConnected && dialog.contains(last) && !last.matches(':disabled')
+        ? last
+        : null;
     (
+      resume ??
       dialog.querySelector<HTMLElement>('[data-autofocus]') ??
       dialog.querySelector<HTMLElement>(FOCUSABLE) ??
       dialog
     ).focus();
 
     return () => {
+      const focused = document.activeElement;
+      lastFocusRef.current =
+        focused instanceof HTMLElement && dialog.contains(focused)
+          ? focused
+          : null;
       const target = returnFocusRef.current;
       if (
         dialog.contains(document.activeElement) &&
