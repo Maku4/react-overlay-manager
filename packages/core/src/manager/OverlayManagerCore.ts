@@ -136,9 +136,12 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
       }
     }
 
+    // Components are functions or objects (memo, forwardRef), so any property
+    // key type, including symbols, 0 and '', is a registry lookup.
     if (
       typeof keyOrComponent === 'string' ||
-      typeof keyOrComponent === 'number'
+      typeof keyOrComponent === 'number' ||
+      typeof keyOrComponent === 'symbol'
     ) {
       const key = keyOrComponent as keyof TRegistry;
       const component = this.registry[key] as TRegistry[keyof TRegistry];
@@ -439,7 +442,8 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
       },
     };
 
-    const instance = key ? Object.assign(instanceBase, { key }) : instanceBase;
+    const instance =
+      key !== undefined ? Object.assign(instanceBase, { key }) : instanceBase;
 
     const nextInstances = new Map(this.state.instances);
     nextInstances.set(runtimeId, instance as AnyOverlayInstance<TRegistry>);
@@ -489,8 +493,12 @@ export class OverlayManagerCore<TRegistry extends OverlayRegistry> {
   }
 
   private generateId(): OverlayId {
-    const id = this.createOverlayId(this.nextId);
-    this.nextId += 1;
+    // Skip values already taken by explicit IDs
+    let id: OverlayId;
+    do {
+      id = this.createOverlayId(this.nextId);
+      this.nextId += 1;
+    } while (this.state.instances.has(id));
     return id;
   }
 
