@@ -679,7 +679,7 @@ The container the manager renders around each overlay gets `aria-hidden="true"` 
 
 ## Contributing and security
 
-See [CONTRIBUTING.md](https://github.com/Maku4/react-overlay-manager/blob/main/CONTRIBUTING.md) for setup and checks, and [SECURITY.md](https://github.com/Maku4/react-overlay-manager/blob/main/SECURITY.md) to report a vulnerability.
+See [CONTRIBUTING.md](https://github.com/Maku4/react-overlay-manager/blob/main/CONTRIBUTING.md) for setup, checks and the server-rendered demo app, and [SECURITY.md](https://github.com/Maku4/react-overlay-manager/blob/main/SECURITY.md) to report a vulnerability.
 
 ## License
 

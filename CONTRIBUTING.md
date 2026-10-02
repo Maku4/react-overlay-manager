@@ -39,6 +39,27 @@ pnpm exec vitest run packages/devtools/tests/keyboard-selection.spec.tsx
 
 Runtime tests live in `packages/*/tests`. Type-level tests live in `packages/*/types-tests`.
 
+## Demo
+
+`demo/` is a small app that the server renders with `renderToString` and the browser hydrates. It imports the built packages, so build them first:
+
+```bash
+pnpm build
+node demo/server.mjs
+```
+
+Open http://localhost:5173/. Set `PORT` or `HOST` to use a different address. After changing package source, run `pnpm build` again and restart the server.
+
+The page shows whether hydration finished and how many recoverable hydration errors React reported. Use it to check:
+
+- opening, hiding, showing, closing and reopening a dialog with the same ID,
+- a nested confirmation (`'hide-previous'`) and a stacked help dialog (`'stack'`),
+- removal after the exit transition, or after the 400 ms fallback with reduced motion turned on,
+- keyboard use: Tab stays in the top dialog, Escape closes it and focus returns to the opener,
+- the DevTools panel, including keyboard row selection, BigInt and circular props, and a reload with the panel open.
+
+The dialog focus handling lives in `demo/src/Dialog.tsx`. The library does not trap or restore focus.
+
 ## Changes
 
 - Add a regression test that fails without your fix.
