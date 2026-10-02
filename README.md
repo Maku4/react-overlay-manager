@@ -12,6 +12,7 @@ A type-safe overlay system for React 18 and 19 with optional DevTools.
 ## Contents
 
 - [Installation](#installation)
+  - [Agent skill](#agent-skill)
 - [Quick start](#quick-start)
 - [API reference](#api-reference)
 - [React hook: `useOverlayStore`](#react-hook-useoverlaystore)
@@ -44,6 +45,14 @@ A type-safe overlay system for React 18 and 19 with optional DevTools.
 
 ```bash
 pnpm add @react-overlay-manager/core   # or npm / yarn
+```
+
+### Agent skill
+
+Coding agents can use the [`react-overlay-manager` skill](https://github.com/Maku4/react-overlay-manager/blob/main/skills/react-overlay-manager/SKILL.md) when they add or fix overlays in your app. It covers the setup, result handling and common mistakes described in this README. Install it into your project with the [skills CLI](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add Maku4/react-overlay-manager --skill react-overlay-manager
 ```
 
 ---
