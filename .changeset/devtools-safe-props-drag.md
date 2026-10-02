@@ -7,3 +7,5 @@ The details view no longer crashes on props that JSON cannot serialize. BigInt v
 The floating button can be dragged again after the panel is closed, including when the panel was restored open from session storage.
 
 Overlay rows are now buttons. Tab reaches each row, Enter or Space selects it, the selected row is marked with `aria-current`, and keyboard focus shows a visible outline.
+
+Server-rendered apps no longer hit a hydration mismatch when the panel was left open. DevTools renders closed on the server and on the first client render, then reopens the panel from session storage after mount.

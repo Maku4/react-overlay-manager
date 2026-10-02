@@ -9,21 +9,28 @@ export function Devtools<TRegistry extends OverlayRegistry>({
 }: {
   manager: OverlayManagerCore<TRegistry>;
 }) {
-  const [isOpen, setIsOpen] = useState(() => {
-    try {
-      return sessionStorage.getItem('rom-devtools-open') === '1';
-    } catch {
-      return false;
-    }
-  });
+  // Start closed on both server and client so hydration matches, then restore
+  // the stored state after mount. The panel reads its own stored position and
+  // size, so it only ever mounts on the client after this restore.
+  const [isOpen, setIsOpen] = useState(false);
+  const [restored, setRestored] = useState(false);
 
   const overlayCount = useDevtoolsStore(manager, (s) => s.overlayStack.length);
 
   useEffect(() => {
     try {
+      if (sessionStorage.getItem('rom-devtools-open') === '1') setIsOpen(true);
+    } catch {}
+    setRestored(true);
+  }, []);
+
+  useEffect(() => {
+    // Writing before the restore would replace a stored "open" with "closed".
+    if (!restored) return;
+    try {
       sessionStorage.setItem('rom-devtools-open', isOpen ? '1' : '0');
     } catch {}
-  }, [isOpen]);
+  }, [isOpen, restored]);
 
   useEffect(() => {
     const KEY_TOGGLE = 'O' as const;
