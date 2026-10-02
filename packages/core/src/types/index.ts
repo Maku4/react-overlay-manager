@@ -20,10 +20,14 @@ export interface PromiseWithId<T> extends Promise<T> {
 }
 
 export interface OverlayManagerBase {
+  /**
+   * Opens an overlay component. The promise resolves with the value passed to
+   * `close(result)`, or `undefined` when the overlay closes without a result.
+   */
   open<P, R>(
     component: OverlayComponent<P, R>,
     options: OpenOptions<P>
-  ): PromiseWithId<R>;
+  ): PromiseWithId<WithCancellation<R>>;
   /**
    * Narrow this manager to a typed `OverlayManagerCore` with a known registry.
    * This is a purely type-level helper and has no runtime cost.
@@ -84,14 +88,26 @@ export type ComponentProps<T> =
     : never;
 
 /**
- * Extracts the result type from an `OverlayComponent`.
+ * Adds `undefined` for an overlay closed without a result. Types that already
+ * accept `undefined`, such as `void` and `unknown`, stay unchanged.
+ * @internal
+ */
+type WithCancellation<R> = [undefined] extends [R] ? R : R | undefined;
+
+/**
+ * The value an `open()` promise for this component resolves with: the result
+ * passed to `close(result)`, or `undefined` when the overlay closes without
+ * one, for example through `close()` or `closeAll()`.
  * @template T The `OverlayComponent` type.
  */
 export type OverlayResult<T> =
   T extends ComponentType<infer P>
     ? P extends InjectedOverlayProps<infer R>
-      ? R
-      : never
+      ? WithCancellation<R>
+      : // A `never` result infers nothing, but close() still resolves undefined
+        P extends InjectedOverlayProps<never>
+        ? undefined
+        : never
     : never;
 
 /**

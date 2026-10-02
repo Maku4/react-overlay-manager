@@ -17,5 +17,5 @@ const Comp: OverlayComponent<Props, Result> = defineOverlay<Props, Result>(
 // ComponentProps extracts the user-defined props
 expectType<Props>({} as ComponentProps<typeof Comp>);
 
-// OverlayResult extracts the result type
-expectType<Result>({} as OverlayResult<typeof Comp>);
+// OverlayResult is the result, or undefined when closed without one
+expectType<Result | undefined>({} as OverlayResult<typeof Comp>);
