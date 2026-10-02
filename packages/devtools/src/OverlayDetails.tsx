@@ -7,6 +7,7 @@ import type {
   AnyOverlayInstance,
 } from '@react-overlay-manager/core';
 import { OverlayManagerCore } from '@react-overlay-manager/core';
+import { formatProps } from './inspectProps';
 
 interface OverlayDetailsProps<TRegistry extends OverlayRegistry> {
   manager: OverlayManagerCore<TRegistry>;
@@ -26,6 +27,14 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
   const componentName = useMemo(() => {
     return instance ? getInstanceOverlayName(instance) : null;
   }, [instance]);
+
+  const propsText = useMemo(
+    () =>
+      instance
+        ? formatProps(instance.props, { manager, pretty: prettyProps })
+        : '',
+    [instance, manager, prettyProps]
+  );
 
   const copy = async (text: string) => {
     try {
@@ -158,13 +167,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
                 Pretty
               </label>
               <button
-                onClick={() =>
-                  copy(
-                    prettyProps
-                      ? JSON.stringify(instance.props, null, 2)
-                      : JSON.stringify(instance.props)
-                  )
-                }
+                onClick={() => copy(propsText)}
                 title="Copy props JSON"
                 style={{
                   padding: '4px 8px',
@@ -191,9 +194,7 @@ export function OverlayDetails<TRegistry extends OverlayRegistry>({
               margin: 0,
             }}
           >
-            {prettyProps
-              ? JSON.stringify(instance.props, null, 2)
-              : JSON.stringify(instance.props)}
+            {propsText}
           </pre>
         </div>
 
