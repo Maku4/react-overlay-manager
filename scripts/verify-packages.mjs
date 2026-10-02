@@ -139,27 +139,61 @@ const plan = options.packDir
   : new Map();
 const retry = { attempts: options.attempts, delayMs: options.delayMs, sleep };
 
+// Commit that provenance of newly published versions must name. The release
+// workflow passes it explicitly. A local run uses the checked-out commit.
+let sourceCommit;
+if (options.packDir) {
+  sourceCommit =
+    options.sourceCommit ??
+    command('git', ['rev-parse', 'HEAD'], repository).trim();
+  assert.match(sourceCommit, /^[0-9a-f]{40}$/, 'Cannot read the source commit');
+  console.log(`Provenance must name source commit ${sourceCommit}`);
+}
+
+// One deadline covers the request and reading its body
+const ATTESTATION_TIMEOUT_MS = 30_000;
+
 async function fetchAttestations(url) {
-  let response;
+  let body;
   try {
-    response = await globalThis.fetch(url);
+    const response = await globalThis.fetch(url, {
+      signal: globalThis.AbortSignal.timeout(ATTESTATION_TIMEOUT_MS),
+    });
+    if (response.status === 404) {
+      throw Object.assign(new Error(`${url}: not found yet`), {
+        kind: 'missing',
+      });
+    }
+    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    body = await response.json();
   } catch (error) {
-    throw Object.assign(new Error(`${url}: ${error.message}`), {
-      kind: 'network',
+    if (error.kind) throw error;
+    const reason =
+      error.name === 'TimeoutError'
+        ? `no response within ${ATTESTATION_TIMEOUT_MS} ms`
+        : error.message;
+    // Only a 404 is retried. Timeouts, network and parse errors fail.
+    throw Object.assign(new Error(`${url}: ${reason}`), {
+      kind: error instanceof SyntaxError ? 'unknown' : 'network',
     });
   }
-  if (response.status === 404) {
-    throw Object.assign(new Error(`${url}: not found yet`), {
-      kind: 'missing',
-    });
+  if (!Array.isArray(body?.attestations)) {
+    throw new Error(`${url}: response has no attestations list`);
   }
-  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-  const body = await response.json();
-  return body.attestations.map((attestation) =>
-    JSON.parse(
-      Buffer.from(attestation.bundle.dsseEnvelope.payload, 'base64').toString()
-    )
-  );
+  return body.attestations.map((attestation, index) => {
+    try {
+      return JSON.parse(
+        Buffer.from(
+          attestation.bundle.dsseEnvelope.payload,
+          'base64'
+        ).toString()
+      );
+    } catch (error) {
+      throw new Error(
+        `${url}: attestation ${index} cannot be decoded: ${error.message}`
+      );
+    }
+  });
 }
 
 // Downloads one exact version from public npm and checks it against the
@@ -186,6 +220,8 @@ async function downloadPublished(name, destination) {
         version,
         distTag: options.distTag === 'none' ? undefined : options.distTag,
         peers,
+        // Keeps reading metadata until a new version has its attestation URL
+        requireProvenance: plan.has(packageName),
       }),
     };
   }, retry);
@@ -231,13 +267,14 @@ async function downloadPublished(name, destination) {
       released.integrity,
       `${id} on npm is not the tarball the release packed`
     );
-    const statements = await retryPropagation(async () => {
-      const url = meta.dist.attestations?.url;
-      if (!url) {
-        return { pending: [`${id}: no attestations yet`], problems: [] };
-      }
-      return { value: await fetchAttestations(url), pending: [], problems: [] };
-    }, retry);
+    const statements = await retryPropagation(
+      async () => ({
+        value: await fetchAttestations(meta.dist.attestations.url),
+        pending: [],
+        problems: [],
+      }),
+      retry
+    );
     const problems = checkProvenance(statements, {
       name: packageName,
       version,
@@ -247,6 +284,7 @@ async function downloadPublished(name, destination) {
       ).toString('hex'),
       repository: sourceRepository,
       workflowPath: '.github/workflows/release.yml',
+      sourceCommit,
     });
     assert.deepEqual(problems, [], problems.join('\n'));
   }

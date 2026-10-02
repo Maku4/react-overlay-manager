@@ -10,10 +10,25 @@ export const PACKAGES = {
 };
 export const SLSA_PROVENANCE = 'https://slsa.dev/provenance/v1';
 
-const EXACT_VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
+// SemVer 2.0 release or prerelease without build metadata: no leading zeros
+// in numeric identifiers and no empty prerelease identifiers
+const NUMBER = '(0|[1-9]\\d*)';
+const PRERELEASE_ID = '(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)';
+const EXACT_VERSION = new RegExp(
+  `^${NUMBER}\\.${NUMBER}\\.${NUMBER}(?:-(${PRERELEASE_ID}(?:\\.${PRERELEASE_ID})*))?$`
+);
+// npm dist-tag names. A tag that looks like a version would be read as one.
+const DIST_TAG = /^[A-Za-z][0-9A-Za-z._-]*$/;
+const GIT_COMMIT = /^[0-9a-f]{40}$/;
 
 export function isExactVersion(value) {
   return typeof value === 'string' && EXACT_VERSION.test(value);
+}
+
+export function isDistTag(value) {
+  return (
+    typeof value === 'string' && DIST_TAG.test(value) && !/^v\d/.test(value)
+  );
 }
 
 /**
@@ -25,6 +40,7 @@ export function parseVerifierArgs(argv) {
     published: false,
     versions: {},
     packDir: undefined,
+    sourceCommit: undefined,
     distTag: 'latest',
     attempts: 10,
     delayMs: 30_000,
@@ -54,9 +70,22 @@ export function parseVerifierArgs(argv) {
       case '--pack-dir':
         options.packDir = valueAfter(i++, flag);
         break;
-      case '--dist-tag':
-        options.distTag = valueAfter(i++, flag);
+      case '--dist-tag': {
+        const tag = valueAfter(i++, flag);
+        if (!isDistTag(tag)) {
+          throw new Error(`${flag} needs an npm dist-tag name, got "${tag}"`);
+        }
+        options.distTag = tag;
         break;
+      }
+      case '--source-commit': {
+        const commit = valueAfter(i++, flag);
+        if (!GIT_COMMIT.test(commit)) {
+          throw new Error(`${flag} needs a full 40-character commit SHA`);
+        }
+        options.sourceCommit = commit;
+        break;
+      }
       case '--attempts':
       case '--delay-ms': {
         const number = Number(valueAfter(i++, flag));
@@ -71,9 +100,18 @@ export function parseVerifierArgs(argv) {
         throw new Error(`Unknown option ${flag}`);
     }
   }
-  const publishedOnly = ['--core', '--devtools', '--pack-dir', '--dist-tag'];
+  const publishedOnly = [
+    '--core',
+    '--devtools',
+    '--pack-dir',
+    '--dist-tag',
+    '--source-commit',
+  ];
   if (!options.published && argv.some((arg) => publishedOnly.includes(arg))) {
     throw new Error(`${publishedOnly.join(', ')} need --published`);
+  }
+  if (options.sourceCommit && !options.packDir) {
+    throw new Error('--source-commit needs --pack-dir');
   }
   return options;
 }
@@ -163,6 +201,11 @@ export function checkRegistryVersion(meta, expected) {
   if (!meta.dist?.integrity?.startsWith('sha512-')) {
     problems.push(`${id}: registry has no sha512 integrity`);
   }
+  // A version published by this release must gain an attestation URL. Until
+  // then the metadata is fetched again.
+  if (expected.requireProvenance && !meta.dist?.attestations?.url) {
+    pending.push(`${id}: no attestations yet`);
+  }
   if (expected.distTag) {
     const tagged = meta['dist-tags']?.[expected.distTag];
     if (tagged !== expected.version) {
@@ -251,6 +294,20 @@ export function checkProvenance(statements, expected) {
     problems.push(
       `${id}: provenance workflow is ${workflow?.path ?? 'missing'}`
     );
+  }
+  if (expected.sourceCommit) {
+    // The source checkout of this repository, not any other dependency
+    const source =
+      provenance.predicate?.buildDefinition?.resolvedDependencies?.find(
+        (dependency) =>
+          dependency.uri?.startsWith(`git+${expected.repository}@`)
+      );
+    const commit = source?.digest?.gitCommit;
+    if (commit !== expected.sourceCommit) {
+      problems.push(
+        `${id}: provenance source commit is ${commit ?? 'missing'}, expected ${expected.sourceCommit}`
+      );
+    }
   }
   return problems;
 }

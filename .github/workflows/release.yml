@@ -186,8 +186,10 @@ jobs:
           path: ${{ runner.temp }}/changeset-pack
 
       # Downloads the released versions from npm, compares newly published
-      # tarballs with the pack artifact, checks their provenance and runs the
-      # React 18 and 19 consumer contracts. Waits up to about 5 minutes for
-      # npm to show new versions.
+      # tarballs with the pack artifact, checks that their provenance names
+      # this commit and runs the React 18 and 19 consumer contracts. Each
+      # registry step waits up to about 5 minutes for npm to show new data.
       - name: Verify published packages
-        run: pnpm verify:published --pack-dir "$RUNNER_TEMP/changeset-pack"
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: pnpm verify:published --pack-dir "$RUNNER_TEMP/changeset-pack" --source-commit "$SOURCE_COMMIT"

@@ -1,6 +1,6 @@
 # Releasing
 
-Releases run from `.github/workflows/release.yml` on every push to `main`. Versions change only through changesets. A version published to npm cannot be replaced, so every check happens before publication and every later problem needs a maintainer decision.
+Releases run from `.github/workflows/release.yml` on every push to `main`. Versions change only through changesets. Validation gates the release before anything is published. After publication, a read-only job checks what npm serves. A version published to npm cannot be replaced, so a problem found after publication needs a maintainer decision.
 
 Use Node 24, at least 24.15, and pnpm 12.8.1, as pinned in `.nvmrc` and `package.json`.
 
@@ -26,8 +26,8 @@ The pending changesets plan these versions:
 The repository declares that peer as `workspace:^`. `pnpm pack` turns it into `^0.5.0`.
 
 1. Configure the npm trusted publisher for both packages, as listed in [Prerequisites on npm](#prerequisites-on-npm). The publish job fails without it.
-2. Merge the stacked pull requests into `main` in order. Each push runs the release workflow in `version` mode, which opens or updates the "Version Packages" PR. Nothing is published.
-3. Leave the "Version Packages" PR open until the last stacked PR is merged. The workflow rewrites it after every push to `main`.
+2. Merge the stacked pull requests into `main` in order. A push without pending changesets selects no work. Once changesets are on `main`, each push runs the `version` job, which opens or updates the "Version Packages" PR. Nothing is published.
+3. Leave the "Version Packages" PR open until the last stacked PR is merged. Before approving it, check that the release workflow run for that last merge has finished and updated the PR.
 4. Review its final commit:
    - `packages/core/package.json` has version 0.5.0.
    - `packages/devtools/package.json` has version 0.2.4 and keeps the peer `workspace:^`.
@@ -39,12 +39,13 @@ The repository declares that peer as `workspace:^`. `pnpm pack` turns it into `^
 
 ## CI on the Version Packages PR
 
-The `version` job pushes the PR with the workflow's `GITHUB_TOKEN`. GitHub does not start workflow runs for events caused by that token, except that it is rolling out approval-required runs for pull requests it opens or updates. CI on this PR either does not start or waits for "Approve workflows to run" in the merge box.
+The `version` job pushes the PR with the workflow's `GITHUB_TOKEN`. When a workflow opens, updates or reopens a pull request with that token, GitHub creates its CI runs in an approval-required state. See [Triggering a workflow from a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow).
 
-A missing or pending check is not a pass. Before merging, do one of these on the PR head commit:
+A pending check is not a pass. Before merging:
 
-- Approve the waiting runs and wait until CI passes on that commit.
-- Check out the PR head and run `pnpm install --frozen-lockfile` and `pnpm validate`.
+1. Select "Approve workflows to run" in the merge box, as a user with write access.
+2. Wait until CI passes on the current PR head commit.
+3. If the runs cannot be approved, check out the PR head and run `pnpm install --frozen-lockfile` and `pnpm validate` instead.
 
 Merge only the commit you validated. If the workflow updates the PR afterwards, validate again.
 
@@ -54,10 +55,10 @@ Merge only the commit you validated. If the workflow updates the PR afterwards, 
 
 - the exact versions exist, `latest` points to them and the DevTools peer accepts the released core
 - every newly published tarball matches the SHA256 of the tarball the `pack` job built
-- newly published versions have SLSA provenance from this repository's `release.yml`, and `npm audit signatures` passes
+- newly published versions have SLSA provenance from this repository's `release.yml` that names the exact released commit, and `npm audit signatures` passes
 - React 18 and 19 consumers that install the exact versions from npm pass the same contracts as `pnpm verify:packages`
 
-It waits up to about 5 minutes for npm to show new versions. Authentication and network errors fail the job immediately. A package the release did not publish is checked as well, without a provenance requirement.
+Each registry step, such as reading a package's metadata, waits up to about 5 minutes for npm to show new data: 10 attempts, 30 seconds apart. A request for attestations times out after 30 seconds. Authentication, network and timeout errors fail the job immediately. A package the release did not publish is checked as well, without a provenance requirement.
 
 A failure here cannot roll back the publication. To repeat the check, use "Re-run failed jobs" on the original run while the pack artifact exists (30 days), or run it from a checkout of the released commit:
 
@@ -66,7 +67,9 @@ pnpm install --frozen-lockfile
 pnpm verify:published
 ```
 
-Without options it takes the versions from the package manifests. `--core <version>` and `--devtools <version>` check other exact versions. `--pack-dir <dir>` adds the artifact and provenance checks for a downloaded `changeset-pack` artifact. `--dist-tag none` skips the `latest` check after a later release has moved it.
+Without options it takes the versions from the package manifests. `--core <version>` and `--devtools <version>` check other exact versions. `--dist-tag none` skips the `latest` check after a later release has moved it.
+
+Only `--pack-dir <dir>`, pointing at a downloaded `changeset-pack` artifact, adds the artifact and provenance checks. Provenance must then name the commit given by `--source-commit <sha>`, or the checked-out commit without that option. A run without `--pack-dir` does not verify where the packages were built.
 
 Check the release three times:
 
