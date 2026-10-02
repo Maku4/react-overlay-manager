@@ -121,8 +121,14 @@ export function Devtools<TRegistry extends OverlayRegistry>({
       btn.style.bottom = `${Math.max(8, origBottom - dy)}px`;
     };
 
-    const onMouseUp = () => {
+    const onMouseUp = (e: MouseEvent) => {
       isDragging = false;
+      // The browser only clicks the button when the release lands on it.
+      // Otherwise no click follows, and keeping the flag would swallow the
+      // next keyboard activation.
+      if (!(e.target instanceof Node && btn.contains(e.target))) {
+        dragged = false;
+      }
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
