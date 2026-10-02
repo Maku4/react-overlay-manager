@@ -2,7 +2,6 @@ import { createContext, useContext, useState } from 'react';
 import {
   createOverlayManager,
   defineOverlay,
-  type InjectedOverlayProps,
   type OverlayComponent,
   type OverlayId,
 } from '@react-overlay-manager/core';
@@ -43,21 +42,10 @@ export const ProfileActions = createContext<{ openProfile: () => void }>({
   openProfile: () => {},
 });
 
-type ProfileDialogProps = ProfileProps &
-  InjectedOverlayProps<ProfileResult | undefined>;
-
 export const ProfileDialog = defineOverlay<
   ProfileProps,
   ProfileResult | undefined
->(function Profile(props) {
-  return (
-    // Reopening an ID while its old overlay is still closing can reuse the same
-    // React element. The key gives each session fresh local state.
-    <ProfileBody key={props.session} {...props} />
-  );
-});
-
-function ProfileBody({
+>(function Profile({
   id,
   name,
   session,
@@ -66,7 +54,7 @@ function ProfileBody({
   hide,
   close,
   manager,
-}: ProfileDialogProps) {
+}) {
   const overlays = manager.as<DemoRegistry>();
   const { openProfile } = useContext(ProfileActions);
   const [note, setNote] = useState('');
@@ -144,7 +132,7 @@ function ProfileBody({
       </div>
     </Dialog>
   );
-}
+});
 
 export const ConfirmDialog = defineOverlay<ConfirmProps, boolean>(
   function Confirm({ message, visible, close }) {

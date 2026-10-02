@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import {
   getInstanceOverlayName,
   OverlayManager,
   useOverlayStore,
 } from '@react-overlay-manager/core';
 import { OverlayManagerDevtools } from '@react-overlay-manager/devtools';
-import { HYDRATION_ERROR_EVENT, hydrationErrors } from './hydration';
+import { hydrationErrors, subscribeToHydrationErrors } from './hydration';
 import {
   createDemoOverlays,
   createGraph,
@@ -188,17 +188,20 @@ function StackTable({ manager }: { manager: DemoOverlays }) {
   );
 }
 
-function HydrationStatus() {
-  const [hydrated, setHydrated] = useState(false);
-  const [errorCount, setErrorCount] = useState(0);
+const subscribeNever = () => () => {};
 
-  useEffect(() => {
-    const sync = () => setErrorCount(hydrationErrors.length);
-    setHydrated(true);
-    sync();
-    window.addEventListener(HYDRATION_ERROR_EVENT, sync);
-    return () => window.removeEventListener(HYDRATION_ERROR_EVENT, sync);
-  }, []);
+function HydrationStatus() {
+  // false on the server and during hydration, true once the client re-renders
+  const hydrated = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false
+  );
+  const errorCount = useSyncExternalStore(
+    subscribeToHydrationErrors,
+    () => hydrationErrors.length,
+    () => 0
+  );
 
   const text = !hydrated
     ? 'Server HTML, not hydrated yet'
