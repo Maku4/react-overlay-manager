@@ -57,4 +57,4 @@ Pick the affected packages and the bump type, then describe the change from a us
 
 ## Reporting security issues
 
-Do not open a public issue for a vulnerability. Follow [SECURITY.md](SECURITY.md).
+Do not describe a vulnerability in a public issue. Follow [SECURITY.md](SECURITY.md).
