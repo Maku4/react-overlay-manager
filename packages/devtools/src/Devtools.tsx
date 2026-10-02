@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useSyncExternalStore } from 'react';
 import { DevtoolsPanel } from './DevtoolsPanel';
 import type { OverlayRegistry } from '@react-overlay-manager/core';
 import type { OverlayManagerCore } from '@react-overlay-manager/core';
@@ -7,33 +7,48 @@ import { useDevtoolsStore } from './useDevtoolsStore';
 /** Pointer movement in pixels before a press on the floating button counts as a drag. */
 const DRAG_THRESHOLD = 3;
 
+const OPEN_KEY = 'rom-devtools-open';
+
+function readStoredOpen(): boolean {
+  try {
+    return sessionStorage.getItem(OPEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+// Session storage has no change events within a tab, so there is nothing to subscribe to.
+const subscribeNever = () => () => {};
+const closedOnServer = () => false;
+
 export function Devtools<TRegistry extends OverlayRegistry>({
   manager,
 }: {
   manager: OverlayManagerCore<TRegistry>;
 }) {
-  // Start closed on both server and client so hydration matches, then restore
-  // the stored state after mount. The panel reads its own stored position and
-  // size, so it only ever mounts on the client after this restore.
-  const [isOpen, setIsOpen] = useState(false);
-  const [restored, setRestored] = useState(false);
+  // The server snapshot is always closed. During hydration React renders that
+  // first, then re-renders with the stored value, so the markup matches. The
+  // panel reads its own stored position and size and therefore only mounts on
+  // the client.
+  const storedOpen = useSyncExternalStore(
+    subscribeNever,
+    readStoredOpen,
+    closedOnServer
+  );
+  // null until the user toggles the panel in this mount
+  const [override, setOverride] = useState<boolean | null>(null);
+  const isOpen = override ?? storedOpen;
+  const setIsOpen = (open: boolean) => setOverride(open);
 
   const overlayCount = useDevtoolsStore(manager, (s) => s.overlayStack.length);
 
   useEffect(() => {
+    // Only a user toggle is written, so a stored "open" is never replaced on mount.
+    if (override === null) return;
     try {
-      if (sessionStorage.getItem('rom-devtools-open') === '1') setIsOpen(true);
+      sessionStorage.setItem(OPEN_KEY, override ? '1' : '0');
     } catch {}
-    setRestored(true);
-  }, []);
-
-  useEffect(() => {
-    // Writing before the restore would replace a stored "open" with "closed".
-    if (!restored) return;
-    try {
-      sessionStorage.setItem('rom-devtools-open', isOpen ? '1' : '0');
-    } catch {}
-  }, [isOpen, restored]);
+  }, [override]);
 
   useEffect(() => {
     const KEY_TOGGLE = 'O' as const;
@@ -60,7 +75,7 @@ export function Devtools<TRegistry extends OverlayRegistry>({
         event.shiftKey &&
         event.key.toUpperCase() === KEY_TOGGLE
       ) {
-        setIsOpen((prev) => !prev);
+        setOverride((prev) => !(prev ?? readStoredOpen()));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
