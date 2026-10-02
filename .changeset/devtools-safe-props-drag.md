@@ -11,3 +11,5 @@ Overlay rows are now buttons. Tab reaches each row, Enter or Space selects it, t
 Server-rendered apps no longer hit a hydration mismatch when the panel was left open. DevTools renders closed on the server and on the first client render, then reopens the panel from session storage after mount.
 
 The Show and Close actions are disabled for an overlay that is already closing, because its promise has resolved and it is waiting for removal. Show still works for a hidden overlay that is not closing.
+
+The DevTools entry point now starts with `'use client'`, so a Next.js App Router server component can render `OverlayManagerDevtools` directly. Production builds still leave out the DevTools UI.
