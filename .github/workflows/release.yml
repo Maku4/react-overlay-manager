@@ -113,6 +113,8 @@ jobs:
   publish:
     needs: pack
     runs-on: ubuntu-latest
+    # Must match the environment in each package's npm trusted publisher
+    environment: npm-publish
     permissions:
       contents: write
       id-token: write

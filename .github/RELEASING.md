@@ -118,7 +118,7 @@ Publishing uses npm trusted publishing (OIDC), so the workflow needs no npm toke
 - Organization or user: `Maku4`
 - Repository: `react-overlay-manager`
 - Workflow filename: `release.yml`
-- Environment: leave empty
+- Environment: `npm-publish`, the environment of the `publish` job in `release.yml`. npm rejects the publish if the two differ.
 - Allowed actions: allow `npm publish`. The workflow publishes directly and does not use staged publishing.
 
 Set this under Package settings, Trusted publishing for each package. After the first successful release, the `NPM_TOKEN` repository secret is no longer used and can be removed.
@@ -128,3 +128,4 @@ The publish job requests `id-token: write` and runs npm 11.5.1 or later on Node 
 ## Prerequisites on GitHub
 
 - Settings, Actions, General: enable "Allow GitHub Actions to create and approve pull requests". The version job needs it to open the version PR.
+- The `publish` job runs in the `npm-publish` environment. GitHub creates it on the first run if it does not exist. Protection rules set on it, such as required reviewers, apply before publishing.
