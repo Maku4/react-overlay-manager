@@ -1,5 +1,11 @@
 # @react-overlay-manager/core
 
+## 0.4.1
+
+### Patch Changes
+
+- Patch release to pick up the React 19.2.1 security update and related dependency bumps.
+
 ## 0.4.0
 
 ### Minor Changes
