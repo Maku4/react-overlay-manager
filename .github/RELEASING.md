@@ -11,7 +11,7 @@ Releases run from `.github/workflows/release.yml` on every push to `main`. Versi
 2. `pack` runs `pnpm validate` on the commit being released, then packs the packages with `pnpm pack`. If validation fails, nothing is published.
 3. `publish` publishes those tarballs with the npm CLI through trusted publishing. It then tags the new versions and creates GitHub releases.
 
-`pnpm validate` is the same gate CI runs on pull requests: build, type checks, type tests, lint, formatting, tests with coverage and `pnpm audit`.
+`pnpm validate` is the same gate CI runs on pull requests: build, type checks, type tests, lint, formatting, tests with coverage, packed package checks with React 18 and 19 consumers, and `pnpm audit`.
 
 ## Recovering a partial release
 
