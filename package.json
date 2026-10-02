@@ -19,8 +19,9 @@
     "format:check": "prettier --check .",
     "type-check": "pnpm -r --filter=\"./packages/*\" type-check",
     "ci:version": "changeset version",
-    "validate": "pnpm build && pnpm type-check && pnpm test:types && pnpm lint && pnpm format:check && pnpm test:coverage && pnpm audit",
-    "release:publish": "node .github/scripts/publish-packed.mjs && changeset git-tag"
+    "validate": "pnpm build && pnpm type-check && pnpm test:types && pnpm lint && pnpm format:check && pnpm test:coverage && pnpm verify:packages && pnpm audit",
+    "release:publish": "node .github/scripts/publish-packed.mjs && changeset git-tag",
+    "verify:packages": "node scripts/verify-packages.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",
