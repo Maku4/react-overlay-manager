@@ -15,3 +15,4 @@ import './events-and-default-manager.test-d';
 import './ids-and-openoptions.test-d';
 import './open-required-by-key-and-component.test-d';
 import './numeric-and-symbol-keys.test-d';
+import './cancellation-result.test-d';
