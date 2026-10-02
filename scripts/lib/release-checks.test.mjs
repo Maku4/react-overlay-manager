@@ -47,6 +47,22 @@ describe('parseVerifierArgs', () => {
     assert.throws(() => parseVerifierArgs(['--pack-dir', '/tmp/x']));
   });
 
+  it('rejects malformed exact versions', () => {
+    for (const version of ['01.2.3', '1.2.3-.', '1.2.3-a..b', '1.2.3-01']) {
+      assert.throws(() =>
+        parseVerifierArgs(['--published', '--core', version])
+      );
+    }
+  });
+
+  it('rejects invalid npm dist-tags', () => {
+    for (const tag of ['1.2.3', 'has space', 'https://evil.test']) {
+      assert.throws(() =>
+        parseVerifierArgs(['--published', '--dist-tag', tag])
+      );
+    }
+  });
+
   it('rejects unknown options and invalid retry bounds', () => {
     assert.throws(() => parseVerifierArgs(['--publish']), /Unknown option/);
     assert.throws(() => parseVerifierArgs(['--attempts', '0']));
@@ -140,6 +156,40 @@ describe('checkRegistryVersion', () => {
     );
     assert.deepEqual(result.problems, []);
     assert.match(result.pending[0], /latest points to 0.2.3/);
+  });
+
+  it('waits for required provenance metadata to appear before accepting a release', async () => {
+    const required = { ...expected, requireProvenance: true };
+    const first = checkRegistryVersion(meta(), required);
+    assert.deepEqual(first.problems, []);
+    assert.ok(first.pending.length > 0, 'Missing attestations must be pending');
+    let reads = 0;
+    const visible = await retryPropagation(
+      async () => {
+        const current =
+          ++reads === 1
+            ? meta()
+            : meta({
+                dist: {
+                  integrity: 'sha512-abc',
+                  attestations: {
+                    url: 'https://registry.npmjs.org/attestations/test',
+                  },
+                },
+              });
+        return { value: current, ...checkRegistryVersion(current, required) };
+      },
+      { attempts: 2, delayMs: 0, sleep: async () => {} }
+    );
+    assert.equal(reads, 2);
+    assert.ok(visible.dist.attestations.url);
+  });
+
+  it('accepts unchanged packages without requiring new attestations', () => {
+    assert.deepEqual(
+      checkRegistryVersion(meta(), { ...expected, requireProvenance: false }),
+      { pending: [], problems: [] }
+    );
   });
 
   it('reports a different version, dangling tag and missing integrity', () => {
@@ -284,6 +334,32 @@ describe('checkProvenance', () => {
       /workflow is/
     );
   });
+
+  for (const caseName of ['different', 'missing'])
+    it(`rejects a ${caseName} source commit in provenance`, () => {
+      const sourceCommit = 'a'.repeat(40);
+      const withCommit = (commit) => {
+        const value = statement();
+        value.predicate.buildDefinition.resolvedDependencies = [
+          {
+            uri: `git+${expected.repository}@refs/heads/main`,
+            digest: { gitCommit: commit },
+          },
+        ];
+        return value;
+      };
+      const release = { ...expected, sourceCommit };
+      assert.deepEqual(
+        checkProvenance([withCommit(sourceCommit)], release),
+        []
+      );
+      const invalid =
+        caseName === 'different' ? withCommit('b'.repeat(40)) : statement();
+      assert.ok(
+        checkProvenance([invalid], release).length > 0,
+        `${caseName} source commit must fail even with a matching tarball and workflow`
+      );
+    });
 });
 
 describe('retryPropagation', () => {
