@@ -52,15 +52,45 @@ async function check(label, action) {
   }
 }
 
-function latest(packageName, major) {
-  const versions = JSON.parse(
-    command(
-      npm,
-      ['view', `${packageName}@${major}`, 'version', '--json'],
-      temporary
-    )
-  );
-  return Array.isArray(versions) ? versions.at(-1) : versions;
+// Consumers install without a lockfile, so every package they pull in is
+// pinned to an exact version. Overrides cover the transitive dependencies.
+const esbuildVersion = '0.28.2';
+const consumers = {
+  18: {
+    react: '18.3.1',
+    'react-dom': '18.3.1',
+    '@types/react': '18.3.31',
+    '@types/react-dom': '18.3.7',
+    overrides: {
+      scheduler: '0.23.2',
+      'loose-envify': '1.4.0',
+      'js-tokens': '4.0.0',
+      csstype: '3.2.3',
+      '@types/prop-types': '15.7.15',
+    },
+  },
+  19: {
+    react: '19.3.0',
+    'react-dom': '19.3.0',
+    '@types/react': '19.3.0',
+    '@types/react-dom': '19.3.0',
+    overrides: {
+      scheduler: '0.28.0',
+      csstype: '3.2.3',
+    },
+  },
+};
+
+function installedVersions(tree, found = new Map()) {
+  for (const [name, node] of Object.entries(tree.dependencies ?? {})) {
+    // Optional packages for other platforms are listed without a version.
+    // A missing required package already makes `npm ls` fail.
+    if (!node.version) continue;
+    if (!found.has(name)) found.set(name, new Set());
+    found.get(name).add(node.version);
+    installedVersions(node, found);
+  }
+  return found;
 }
 
 try {
@@ -96,8 +126,8 @@ try {
   );
   const workspaceRequire = createRequire(join(repository, 'package.json'));
   const compilerVersion = workspaceRequire('typescript/package.json').version;
-  const esbuildVersion = JSON.parse(
-    command(npm, ['view', 'esbuild', 'version', '--json'], temporary)
+  const devtoolsManifest = JSON.parse(
+    await readFile(join(repository, 'packages/devtools/package.json'), 'utf8')
   );
 
   for (const major of [18, 19]) {
@@ -105,10 +135,13 @@ try {
     await cp(join(repository, 'scripts/fixtures/package-consumer'), consumer, {
       recursive: true,
     });
-    const reactVersion = latest('react', major);
-    const domVersion = latest('react-dom', major);
-    const reactTypesVersion = latest('@types/react', major);
-    const domTypesVersion = latest('@types/react-dom', major);
+    const {
+      react: reactVersion,
+      'react-dom': domVersion,
+      '@types/react': reactTypesVersion,
+      '@types/react-dom': domTypesVersion,
+      overrides,
+    } = consumers[major];
     await writeFile(
       join(consumer, 'package.json'),
       JSON.stringify(
@@ -127,11 +160,23 @@ try {
             typescript: compilerVersion,
             esbuild: esbuildVersion,
           },
+          overrides,
         },
         null,
         2
       )
     );
+    const expected = {
+      '@react-overlay-manager/core': coreManifest.version,
+      '@react-overlay-manager/devtools': devtoolsManifest.version,
+      react: reactVersion,
+      'react-dom': domVersion,
+      '@types/react': reactTypesVersion,
+      '@types/react-dom': domTypesVersion,
+      typescript: compilerVersion,
+      esbuild: esbuildVersion,
+      ...overrides,
+    };
 
     const installed = await check(
       `React ${major} isolated install and peers`,
@@ -148,6 +193,17 @@ try {
           consumer
         );
         command(npm, ['ls', '--omit=dev'], consumer);
+        const tree = JSON.parse(
+          command(npm, ['ls', '--all', '--json'], consumer)
+        );
+        for (const [name, versions] of installedVersions(tree)) {
+          // esbuild pins its platform binary packages to its own version
+          const pinned = name.startsWith('@esbuild/')
+            ? esbuildVersion
+            : expected[name];
+          assert.ok(pinned, `${name} is installed but not pinned`);
+          assert.deepEqual([...versions], [pinned], `${name} version`);
+        }
       }
     );
     if (!installed) continue;
