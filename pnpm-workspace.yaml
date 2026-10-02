@@ -5,6 +5,3 @@ packages:
 # esbuild ships prebuilt binaries, so its install script is not needed
 allowBuilds:
   esbuild: false
-
-overrides:
-  tmp@<=0.2.3: '>=0.2.4'

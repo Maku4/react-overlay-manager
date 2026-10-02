@@ -93,3 +93,6 @@ temp/
 # OS generated files
 Thumbs.db 
 .cursor
+
+# Vitest reports and artifacts
+.vitest/

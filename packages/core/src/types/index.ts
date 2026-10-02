@@ -184,8 +184,7 @@ export type RegistryInstance<
  * @template TReg The application's `OverlayRegistry`.
  */
 export type AnyOverlayInstance<TReg extends OverlayRegistry> =
-  | RegistryInstance<TReg, keyof TReg>
-  | OverlayInstance<any, any>;
+  RegistryInstance<TReg, keyof TReg> | OverlayInstance<any, any>;
 
 /**
  * Helper type to resolve the actual component type from the input

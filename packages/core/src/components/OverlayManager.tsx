@@ -66,10 +66,12 @@ export function OverlayManager<TRegistry extends OverlayRegistry>({
 }: OverlayManagerProps<TRegistry>) {
   // Ensures we only attempt to portal on the client, preventing SSR issues.
   const [isMounted, setIsMounted] = useState(false);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one extra render after mount is the client-only gate
   useEffect(() => setIsMounted(true), []);
 
   // Synchronize props with the imperative manager instance.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability -- the manager is an external store configured from props
     manager.defaultExitDuration = defaultExitDuration;
     if (portalTarget !== undefined) {
       manager.defaultPortalTarget = portalTarget;

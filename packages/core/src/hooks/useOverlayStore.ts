@@ -27,6 +27,7 @@ export function useOverlayStore<
     s as TSelected
 ): TSelected {
   const selectorRef = useRef(selector);
+  // eslint-disable-next-line react-hooks/refs -- subscriptions compare against the latest render's selector
   selectorRef.current = selector;
 
   const subscribe = useCallback(
